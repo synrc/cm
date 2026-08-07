@@ -1,0 +1,1036 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english,ukrainian]{babel}
+\usepackage{hyperref}
+
+\title{Building a Compliant Security Profile:\\ \foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}} and NIST Certification \\ for ERP/1 and \foreignlanguage{ukrainian}{ЦОД} Security Profiles}
+\author{maxim@synrc.com}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\selectlanguage{english}
+
+\begin{abstract}
+This article details the methodology for constructing a Comprehensive Information Security System
+(\foreignlanguage{ukrainian}{КСЗІ}) that complies with Ukrainian state standards
+(\foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}}) and the international NIST SP 800-53 framework.
+Using SYNRC/CA --- an open source CMDB we demonstrate how to programmatically define, track, and audit a security profile.
+The approach utilizes Elixir-based Configuration Management Database (CMDB) profiles to maintain strict accountability over hardware,
+software, networks, data, roles, and risks. For security reasons we can only demo/showcase of ERP/1 security (sample) profile.
+\end{abstract}
+
+\setcounter{tocdepth}{2}
+\newpage
+\tableofcontents
+
+\newpage
+\section{Introduction}
+
+\subsection{Terms and Abbreviations}
+
+\begin{description}
+
+    \item[ABAC] Attribute-Based Access Control. An access control model where authorization decisions are based on policies that combine attributes of subjects, resources, actions, and the environment.
+    \item[BPMN] Business Process Model and Notation. A graphical standard for specifying business processes; used in ERP/1 as the orchestration layer for security workflows.
+    \item[CA] Certificate Authority. A trusted entity that issues, manages, and revokes digital certificates.
+    \item[CMDB] Configuration Management Database. A repository that stores structured data about IT assets and their relationships; in ERP/1, expressed as Elixir source code modules.
+    \item[CPS] Certificate Practice Statement. A document that describes the practices of a CA in issuing and managing digital certificates.
+    \item[CRL] Certificate Revocation List. A signed list of certificates that have been revoked before their expiration date.
+    \item[DaC] Documentation as Code. A paradigm where system documentation is generated programmatically from source code, eliminating manual maintenance and documentation drift.
+    \item[\foreignlanguage{ukrainian}{ДССЗЗІ}] {\selectlanguage{ukrainian}Державна служба спеціального зв'язку та захисту інформації\selectlanguage{english}} (State Service of Special Communications and Information Protection of Ukraine). The regulatory authority responsible for \foreignlanguage{ukrainian}{КСЗІ} certification and information security oversight.
+    \item[\foreignlanguage{ukrainian}{ДСТУ}] {\selectlanguage{ukrainian}Державний Стандарт України\selectlanguage{english}} (State Standard of Ukraine). A national standardization document issued by the National Standardization Body of Ukraine. Key standards include \foreignlanguage{ukrainian}{ДСТУ} 4145-2002 (ECDSA digital signature) and \foreignlanguage{ukrainian}{ДСТУ} 7564-2014 (Kupyna hash function).
+    \item[HSM] Hardware Security Module. A physical computing device that safeguards and manages cryptographic keys. ERP/1 uses IIT Gryada-301 HSMs.
+    \item[IA] Identity and Access (NIST control family). Controls for identifying and authenticating system users, processes, and devices.
+    \item[IaC] Infrastructure as Code. The practice of managing and provisioning infrastructure through machine-readable configuration files.
+    \item[ISMS] Information Security Management System. A framework of policies and procedures for systematically managing an organization's sensitive data (ISO/IEC 27001).
+    \item[JML] Joiner-Mover-Leaver. A lifecycle model for managing identity provisioning events: new hires (joiners), role changes (movers), and departures (leavers).
+    \item[\foreignlanguage{ukrainian}{КСЗІ}] {\selectlanguage{ukrainian}Комплексна Система Захисту Інформації\selectlanguage{english}} (Comprehensive Information Security System). A Ukrainian regulatory concept for a certified, holistic set of organizational and technical measures protecting information in an information system.
+    \item[\foreignlanguage{ukrainian}{КВС} / KVS] Key-Value Store (\texttt{synrc/kvs}). A distributed, append-only data storage layer used in ERP/1 for immutable audit logs and encrypted data storage.
+    \item[MFA] Multi-Factor Authentication. An authentication method requiring two or more verification factors from different categories.
+    \item[mTLS] Mutual TLS. An extension of TLS where both the client and server authenticate each other with X.509 certificates.
+    \item[\foreignlanguage{ukrainian}{НД ТЗІ}] {\selectlanguage{ukrainian}Нормативний Документ Технічного Захисту Інформації\selectlanguage{english}} (Normative Document on Technical Information Protection). Technical standards issued by \foreignlanguage{ukrainian}{ДССЗЗІ} defining mandatory requirements for \foreignlanguage{ukrainian}{КСЗІ} construction and certification.
+    \item[NIST SP 800-53] National Institute of Standards and Technology Special Publication 800-53. ``Security and Privacy Controls for Information Systems and Organizations,'' the primary international framework used for ERP/1 control mapping.
+    \item[\foreignlanguage{ukrainian}{НПА}] {\selectlanguage{ukrainian}Нормативно-Правовий Акт\selectlanguage{english}} (Regulatory Legal Act). A binding legal instrument (law, order, resolution) issued by a Ukrainian state authority.
+    \item[OCSP] Online Certificate Status Protocol. A protocol for checking the revocation status of an X.509 certificate in real time.
+    \item[OID] Object Identifier. A globally unique identifier used in X.509 certificates and ASN.1 structures to denote security policies, certificate extensions, and cryptographic algorithms.
+    \item[PKI] Public Key Infrastructure. A framework of roles, policies, hardware, software, and procedures for creating, managing, distributing, using, storing, and revoking digital certificates.
+    \item[POA\&M] Plan of Action and Milestones. A document tracking identified security weaknesses, the resources required to address them, and the milestones for remediation.
+    \item[RBAC] Role-Based Access Control. An access control model where permissions are associated with roles, and users are assigned to those roles.
+    \item[SIEM] Security Information and Event Management. A system for real-time analysis of security alerts generated by hardware and applications.
+    \item[SBOM] Software Bill of Materials. A formal record of the components, libraries, and modules that make up a software product.
+    \item[\foreignlanguage{ukrainian}{ТЗІ}] {\selectlanguage{ukrainian}Технічний Захист Інформації\selectlanguage{english}} (Technical Information Protection). The Ukrainian regulatory domain covering technical measures for protecting information from unauthorized access.
+    \item[TSA] Time Stamping Authority. A trusted third party that issues RFC 3161 timestamps, proving that a specific piece of data existed at a specific moment in time.
+    \item[\foreignlanguage{ukrainian}{ЦОД}] {\selectlanguage{ukrainian}Центр Обробки Даних\selectlanguage{english}} (Data Processing Center / Data Center). The physical or virtual facility housing ERP/1 infrastructure components.
+
+\end{description}
+
+\subsection{Legal and Regulatory Framework}
+
+ERP/1 is developed and certified under a layered regulatory hierarchy that combines Ukrainian national law, state technical standards, and international frameworks. Understanding this hierarchy is essential to interpreting the control mappings throughout this document.
+
+\textbf{Ukrainian National Law.}
+The legal basis for information security in Ukraine is established by the Law of Ukraine ``On Information'' (No.~2657-XII), the Law ``On Protection of Information in Information and Communication Systems'' (No.~80/94-VR), and the Law ``On Electronic Trust Services'' (No.~2155-VIII). These laws mandate the creation of \foreignlanguage{ukrainian}{КСЗІ} for state information systems and define the enforcement authority of \foreignlanguage{ukrainian}{ДССЗЗІ}.
+
+\textbf{Normative Documents on Technical Information Protection (\foreignlanguage{ukrainian}{НД ТЗІ}).}
+\foreignlanguage{ukrainian}{НД ТЗІ} ({\selectlanguage{ukrainian}Нормативний Документ Технічного Захисту Інформації\selectlanguage{english}}) are technical standards issued by \foreignlanguage{ukrainian}{ДССЗЗІ}. They define mandatory requirements for constructing \foreignlanguage{ukrainian}{КСЗІ}. Key \foreignlanguage{ukrainian}{НД ТЗІ} documents referenced in this paper include:
+
+\paragraph{}
+
+{\small
+\begin{tabular}{@{}p{0.28\textwidth}p{0.72\textwidth}@{}}
+\hline
+\textbf{\foreignlanguage{ukrainian}{НД ТЗІ 1.1-002-99}} & General provisions on technical information protection. \\[2pt]
+\textbf{\foreignlanguage{ukrainian}{НД ТЗІ 2.5-004-99}} & Criteria for evaluating the security of automated systems. \\[2pt]
+\textbf{\foreignlanguage{ukrainian}{НД ТЗІ 2.5-005-99}} & Classification and evaluation methodology. \\[2pt]
+\textbf{\foreignlanguage{ukrainian}{НД ТЗІ 2.5-008-02}} & Requirements for confidential information protection. \\[2pt]
+\textbf{\foreignlanguage{ukrainian}{НД ТЗІ 2.5-010-03}} & Requirements for web application protection. \\[2pt]
+\textbf{\foreignlanguage{ukrainian}{НД ТЗІ 1.6-005-22}} & Requirements for NIST state expertise audit trails. \\[2pt]
+\textbf{\foreignlanguage{ukrainian}{НД ТЗІ 2.3-025-24}} & Three Volumes of security controls detailed descriptions. \\[2pt]
+\textbf{\foreignlanguage{ukrainian}{НД ТЗІ 2.6-001-11}} & NIST two-stage certification. \\[2pt]
+\textbf{\foreignlanguage{ukrainian}{НД ТЗІ 3.6-006-24}} & Security requirements for critical state registries. \\[2pt]
+\textbf{\foreignlanguage{ukrainian}{НД ТЗІ 3.7-003-23}} & Requirements for exploitation documentation. \\
+\textbf{\foreignlanguage{ukrainian}{НАД №409 2025}}     & Security profile public and private data (126). \\[2pt]
+\textbf{\foreignlanguage{ukrainian}{НАД №419 2025}}     & Security profile for official data (155). \\[2pt]
+\hline
+\end{tabular}
+}
+
+\paragraph{}
+
+\textbf{Regulatory Legal Acts (\foreignlanguage{ukrainian}{НПА} --- {\selectlanguage{ukrainian}Нормативно-Правові Акти\selectlanguage{english}}).}
+\foreignlanguage{ukrainian}{НПА} are binding orders and resolutions of the Cabinet of Ministers of Ukraine and \foreignlanguage{ukrainian}{ДССЗЗІ} that govern the certification process, licensing of \foreignlanguage{ukrainian}{КСЗІ} developers and expertise organizations, and the mandatory protection of specific categories of state information resources.
+
+\textbf{International Standards.}
+ERP/1 simultaneously complies with: NIST SP 800-53 Rev.5 (Security and Privacy Controls for Information Systems), ISO/IEC 27001:2022 (ISMS), FIPS 140-3 (Cryptographic Module Validation), and ITU-T X.509 (Public-Key and Attribute Certificate Frameworks).
+
+\newpage
+\subsection{Security Target}
+
+LLC "e-Government Systems" provides high-tech telecommunication solutions for the automation of commercial and state enterprises.
+Their platform is architecturally divided into two primary layers:
+
+\begin{itemize}
+    \item \textbf{Platform (SYS-APP-SYNRC):} The systemic foundation, including the Certificate Authority (CA), L2/L3 VPN tunnels, PKI-aware LDAP, Communicator (CHAT), BPMN process engine, MQTT broker, and KVS storage.
+    \item \textbf{Products (SYS-APP-ERP):} Corporate and state enterprise systems such as Education (Edu), Healthcare (Health), Electronic Documents (Mail), Accounting (Acc), Warehouse Management, and Registries (Cart).
+\end{itemize}
+
+The company's architecture is built to support critical state and defense sector needs.
+It offers special licensing conditions for government applications,
+provided there is strict adherence to architectural compatibility and certification requirements.
+The system strictly follows ITU-T X-series, IETF RFC, NIST/FIPS, DSTU,
+and ISO/IEC standards (e.g., X.509, CMS/S-MIME, AES-GCM, Kyber, DSTU 4145-2002).
+
+In this paper, we demonstrate how to build a unified security profile for this complex architecture.
+The CMDB system maps operational instances directly to NIST SP 800-53 controls (such as CM-8 for
+System Component Inventory, PM-5 for System Inventory) and \foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}}
+requirements (e.g., \foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}} 3.7-003-2023}
+for inventory and exploitation documentation).
+
+\subsection{Hierarchical Security Profiles (L1, L2, L3)}
+The system supports the automated construction of \foreignlanguage{ukrainian}{КСЗІ} security profiles
+based on the regulatory and legal acts in the field of technical protection of
+information (\foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}} \foreignlanguage{ukrainian}{НПА}}).
+This automates documentation generation and the mapping of legislative requirements to technical settings.
+All certificates are issued with OID imprints of their respective security profiles.
+The architecture is divided into three levels of profiles:
+
+\newpage
+\subsubsection{L1: Basic Security Profiles}
+These profiles define the fundamental sets of controls required by the regulations.
+\begin{itemize}
+    \item \textbf{SECURITY POLICIES}\footnote{\url{https://ca.n2o.dev/priv/security-profiles.pdf}}
+    \item \textbf{FULL DIRECTORY (1123)}\footnote{\url{https://ca.n2o.dev/priv/bible_profile.pdf}}
+    \item \textbf{OPEN CONFIDENTIAL (126)}\footnote{\url{https://ca.n2o.dev/priv/legal_l1_profile_409.pdf}}
+    \item \textbf{OFFICIAL (155)}\footnote{\url{https://ca.n2o.dev/priv/legal_l1_profile_419.pdf}}
+    \item \textbf{NIST SP 800-53B BASELINES (LOW, MODERATE, HIGH, PRIVACY)}: Automatically generated formal CMDB security profiles parsed directly from the official NIST OSCAL control mappings. These profiles allow for continuous compliance verification and ensure that the implemented controls in the target system profile satisfy the mandatory controls required by the respective NIST impact level.
+\end{itemize}
+
+\subsubsection{L2: Industry Profiles}
+Industry-specific adaptations that expand upon the baseline controls to meet the requirements of specific sectors.
+\begin{itemize}
+    \item \textbf{COURT INDUSTRY PROFILE}\footnote{\url{https://ca.n2o.dev/priv/legal_l2_court_profile.pdf}}:
+      Industry security profile for the judicial system. It describes an extended set of baseline controls for
+      processing sensitive information in state registries and courts, taking into account the requirements for
+      high availability and data integrity based on \foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}} 3.6-006-24}.
+    \item \textbf{THE DIGITAL UKRAINIAN GOVERNMENT INDUSTRY PROFILE}\footnote{\url{https://ca.n2o.dev/priv/digital-profile.pdf}}:
+      Industry security profile for the Ministry of Digital Transformation of Ukraine.
+\end{itemize}
+
+\subsubsection{L3: Target Security Profiles}
+Specific implementation targets for individual systems and components.
+\begin{itemize}
+    \item \textbf{ERP/1 SECURITY TARGET}\footnote{\url{https://ca.n2o.dev/priv/legal_l3_profile_erp.pdf}}:
+      Target profile for the ERP/1 telecommunications system. Describes the implementation of Attribute-Based
+      Access Control (ABAC), information flow management (BPE), Public Key Infrastructure (PKI), and reliable
+      auditing (KVS) for securing critical business processes.
+    \item \textbf{X.509 CMS MESSAGING SECURITY TARGET}\footnote{\url{https://ca.n2o.dev/priv/chat_profile.pdf}}:
+      Target profile for corporate messenger systems. Based on X.509 and CMS (Cryptographic Message Syntax)
+      cryptographic protocols, providing end-to-end encryption (E2EE), strict authentication, and non-repudiation
+      for legally significant communications.
+    \item \textbf{VPN SECURITY TARGET}\footnote{\url{https://ca.n2o.dev/priv/vpn_profile.pdf}}:
+      Target profile for Virtual Private Network (VPN) and PKI infrastructures. Defines mechanisms for tunneling,
+      node authentication (SC-8), and network traffic protection at the transport layer to secure communication
+      channels against interception and modification.
+\end{itemize}
+
+\subsection{Segregation of Duties}
+According to the regulatory framework of Ukraine (e.g., \foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}} 2.6-001-11}) and best global practices (the \textit{Maker/Checker} principle), building and certifying a Comprehensive Information Security System (\foreignlanguage{ukrainian}{КСЗІ}) is strictly a \textbf{two-stage procedure}. It requires the involvement of two completely independent licensed providers to eliminate any conflict of interest.
+
+\begin{itemize}
+    \item \textbf{Stage 1: The Developer (Provider 1).} The first provider performs the risk assessment,
+      inspects the environment, and creates the "technical instructions" --- the \textbf{Target Security Profile (Technical Specification)}.
+      This provider is also responsible for the physical implementation of the security architecture: configuring cryptography,
+      setting up the Reference Monitor (AC-25), installing certificates, and delivering the system into trial operation.
+    \item \textbf{Stage 2: The Expertise Organizer (Provider 2).} The second provider receives the Technical Specification
+      from the Developer and designs the \textbf{Expertise Program}. This provider conducts an independent technical audit,
+      instrumental testing, and live verification of all implemented controls. Upon successful verification, they issue the
+      Expert Conclusion for the State Service of Special Communications and Information Protection (\foreignlanguage{ukrainian}{ДССЗЗІ}).
+\end{itemize}
+
+This segregation guarantees that the organization creating the security profiles and writing the Elixir CMDB structures
+is legally and practically distinct from the organization auditing and approving them.
+
+\subsection{Security Profile Development Process}
+
+Constructing a comprehensive \foreignlanguage{ukrainian}{КСЗІ} for ERP/1 follows a rigorous, sequential three-layer process.
+This sequence is not arbitrary --- it mirrors the natural dependency chain of a security program: you must first organize
+your people and processes, then capture that organization into authoritative documentation and risk records,
+and only then implement the technical controls that enforce what the documentation prescribes.
+
+\begin{enumerate}
+
+    \item \textbf{Layer 1 --- Organizational Security Profile (Who and How).}
+    The first layer establishes the human and procedural foundation. This includes defining roles and
+    responsibilities (personnel security), establishing training and awareness programs, codifying
+    incident response and maintenance procedures, and securing the physical environment. Without this layer,
+    technical controls have no owner and no organizational context. \texttt{erpuno/itsm} and \texttt{zencrypted/ias} are
+    the primary products that enforce this layer programmatically.
+
+    \item \textbf{Layer 2 --- Metainformational Security Profile (What and Why).}
+    The second layer translates the organizational decisions of Layer 1 into authoritative,
+    machine-verifiable documentation: system security plans, risk taxonomies, data categorization matrices,
+    privacy records, and acquisition policies. The key innovation of ERP/1 is that this layer is not paper-based ---
+    it is expressed as live Elixir source code in the \texttt{synrc/ca} CMDB and automatically projected into
+    audit-ready PDF reports. This eliminates documentation drift and guarantees that what auditors read is
+    exactly what the system does.
+
+    \item \textbf{Layer 3 --- Technical Security Profile (How Enforced).}
+    The third layer implements the technical enforcement mechanisms that the first two layers define.
+    Cryptographic access control, audit logging, network segmentation, integrity checking, and supply
+    chain verification are all realized in specific ERP/1 products (\texttt{zencrypted/ias}, \texttt{erpuno/abac},
+    \texttt{synrc/vpn}, \texttt{synrc/kvs}, etc.). Technical controls reference and enforce the policies
+    established in Layer 1 and documented in Layer 2.
+
+\end{enumerate}
+
+This layered development model ensures full traceability: every technical control in Layer 3 can be traced back
+to a documented policy in Layer 2, which in turn traces back to an organizational decision in Layer 1.
+The entire chain is expressed in version-controlled source code, making the compliance posture continuously auditable and self-consistent.
+
+\newpage
+\section{Organizational Security Profile}
+
+% ============================================================
+% LAYER 1: The Human and Procedural Foundation
+% This section covers the "who" and "how" of security:
+% people, processes, physical environment, and culture.
+% It must be established before documentation (Layer 2) or
+% technical controls (Layer 3) can be meaningfully implemented.
+% Primary products: erpuno/itsm, zencrypted/ias, synrc/ca training
+% ============================================================
+
+The Organizational Security Profile establishes the human and procedural foundation of ERP/1 security.
+These controls define \textit{who} is responsible for security, \textit{how} they are trained,
+\textit{how} incidents and maintenance are handled, \textit{how} personnel are screened and off-boarded,
+and \textit{how} the physical environment is protected. This layer must exist before the Metainformational
+layer can capture it in documentation, and before the Technical layer can enforce it in code.
+
+The Organizational Security Profile covers the people, process, and physical environment controls of ERP/1.
+These are controls whose primary implementation vehicle is human procedure, training, and physical infrastructure,
+rather than software. The platform products in this section (\texttt{erpuno/itsm}, \texttt{zencrypted/ias},
+\texttt{synrc/ca}) support and enforce these controls programmatically, but the controls themselves mandate
+organizational commitment.
+
+% =========================================================
+\subsection{Awareness and Training (AT)}
+% =========================================================
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} provides ERP/1's Awareness and Training controls (AT-2, AT-3). The repository supplies a dedicated test HSM environment and test CA hierarchy for role-based rehearsal, while \href{https://github.com/zencrypted/ias}{\texttt{zencrypted/ias}} enforces training completion programmatically via account attributes.
+
+\textbf{AT-2 --- Literacy Training and Awareness.}
+All ERP/1 users complete mandatory annual security awareness training covering phishing recognition, credential hygiene, incident reporting procedures, and acceptable use of cryptographic tokens. Completion is tracked via \texttt{zencrypted/ias}: the \texttt{completed} attribute must be current for the account to retain access. An expired training record triggers automatic account downgrade to read-only until training is renewed.
+
+\textbf{AT-2(2) --- Phishing Simulations.}
+\texttt{ias} integrates with the ERP/MAIL module to send automated simulated phishing campaigns quarterly. User responses (clicks, credential entry) are silently logged and bound to the user profile as a behavioral risk score attribute. High-risk users are automatically enrolled in remedial training and their sessions are subjected to enhanced monitoring by the SIEM.
+
+\textbf{AT-3 --- Role-Based Training.}
+\texttt{synrc/ca} provides a dedicated simulation environment (test HSM, test CA hierarchy) where security-critical roles --- CA operators, HSM custodians, auditors --- rehearse their procedures without impacting the production system. Key Ceremony rehearsals, OCSP failover drills, and CRL generation procedures are executed in this environment before being authorized for production.
+
+% =========================================================
+\subsection{Incident Response (IR)}
+% =========================================================
+
+\href{https://github.com/erpuno/itsm}{\texttt{erpuno/itsm}} is the Incident Response hub for ERP/1 (IR-1, IR-4, IR-5, IR-6). It receives alerts from Wazuh and \href{https://github.com/zencrypted/ias}{\texttt{zencrypted/ias}}, orchestrates BPMN incident workflows via \href{https://github.com/synrc/bpmn}{\texttt{synrc/bpmn}}, and stores the complete audit trail of every incident in \href{https://github.com/synrc/kvs}{\texttt{synrc/kvs}}.
+
+\textbf{IR-1 --- Incident Response Policy and Procedures.}
+Incident response processes are formalized as BPMN processes in \texttt{synrc/bpmn} and executed via \texttt{erpuno/itsm}. Each incident type (with its MITRE ATT\&CK code) has an assigned BPMN template with clear stages: detection, classification, escalation, remediation, post-analysis.
+
+\textbf{IR-4 --- Incident Handling.}
+\texttt{itsm} automatically receives incidents from Wazuh (via webhook) and \texttt{ias} (upon detecting anomalies per AC-2(12)). Each incident receives a unique INC identifier, bound to the CMDB record of the affected component.
+
+\textbf{IR-5 --- Incident Monitoring.}
+The complete audit trail of each incident (all actions, comments, status changes) is stored in \texttt{kvs} and available for query. Retention period is a minimum of 3 years.
+
+\textbf{IR-6 --- Incident Reporting.}
+\texttt{itsm} automatically generates monthly incident reports in PDF format (using the \texttt{synrc/ca} LaTeX generator) and forwards them to the CISO and the relevant regulator (\foreignlanguage{ukrainian}{ДССЗЗІ}).
+
+% =========================================================
+
+\subsection{Maintenance (MA)}
+% =========================================================
+
+\href{https://github.com/erpuno/itsm}{\texttt{erpuno/itsm}} manages all controlled and remote maintenance activities for ERP/1 (MA-2, MA-4, MA-5). Maintenance windows are modeled as Change Requests, approved via dual-authorization workflow, and logged to the immutable audit trail in \href{https://github.com/synrc/kvs}{\texttt{synrc/kvs}}.
+
+\textbf{MA-2 --- Controlled Maintenance.}
+Any scheduled maintenance work (server, network equipment, HSM servicing) is registered as a Change Request (CR) in \texttt{itsm}. A CR has mandatory fields: \texttt{maintainer}, \texttt{authorization} (X.509 signature from an authorized engineer), \texttt{maintenance\_window}, \texttt{rollback\_plan}.
+
+\textbf{MA-4 --- Nonlocal Maintenance.}
+All remote maintenance access (SSH, RDP) is routed through a dedicated Jump server in the Management VLAN. Access to the Jump server is possible only from fixed IPs via an \texttt{synrc/vpn} tunnel with mandatory MFA.
+
+\textbf{MA-5 --- Maintenance Personnel.}
+The list of authorized maintenance personnel is maintained in the CMDB (\texttt{roles.ex}) and verified by \texttt{ias} before granting access. Non-certified personnel are technically unable to access the systems.
+
+% =========================================================
+% =========================================================
+\subsection{Personnel Security (PS)}
+% =========================================================
+
+\href{https://github.com/zencrypted/ias}{\texttt{zencrypted/ias}} enforces the full personnel lifecycle (PS-3, PS-4, PS-5, PS-6, PS-7) for ERP/1. It integrates with HR via SCIM 2.0 to automate onboarding, role transfers, and termination off-boarding, triggering certificate revocation in \href{https://github.com/synrc/ca}{\texttt{synrc/ca}} within one minute of a termination event.
+
+\textbf{PS-3 --- Personnel Screening.}
+Background verification requirements for each role are encoded as mandatory attributes in \texttt{ias} account profiles. An account with role \texttt{security\_admin} or \texttt{global\_root\_admin} cannot be activated without the \texttt{background\_check\_completed} attribute set by an authorized HR officer. This creates a technical enforcement of the screening policy.
+
+\textbf{PS-4 --- Personnel Termination.}
+When an employee termination event is received from the HR module (via SCIM 2.0 or webhook), \texttt{ias} executes a deterministic off-boarding sequence within one minute: (1) all active sessions are revoked, (2) the account is suspended, (3) all X.509 certificates are submitted for OCSP revocation to \texttt{synrc/ca}, (4) group memberships are removed, and (5) a termination audit event is written to \texttt{kvs}. This eliminates the risk of access persisting after termination.
+
+\textbf{PS-5 --- Personnel Transfer.}
+Role transfers are handled via the Joiner-Mover-Leaver (JML) workflow in \texttt{erpuno/itsm}. A transfer Change Request must be approved by both the origin and destination supervisors. Upon approval, \texttt{ias} simultaneously removes old role attributes and adds new ones, then requests issuance of a new X.509 certificate reflecting the updated role set from \texttt{synrc/ca}.
+
+\textbf{PS-6 --- Access Agreements.}
+As described in PL-4, access agreements (rules of behavior) are accepted cryptographically during certificate enrollment. The signed enrollment request itself constitutes the access agreement. Changes to the rules of behavior trigger a new certificate enrollment cycle, requiring fresh cryptographic acceptance.
+
+\textbf{PS-7 --- External Personnel Security.}
+Third-party contractors and external auditors receive time-limited X.509 certificates from a dedicated sub-CA with a restricted OID scope in \texttt{synrc/ca}. These certificates have a hard expiration aligned with the contract period, after which access terminates automatically without any manual action. The ABAC policies for the \texttt{contractor} role enforce a strict Default Deny posture, granting only explicitly scoped resource access.
+
+% =========================================================
+\subsection{Physical and Environmental Protection (PE)}
+% =========================================================
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} CMDB governs physical and environmental protection (PE-2, PE-3, PE-6, PE-12) by maintaining authoritative records of all physical zones, access authorizations, and infrastructure components (\texttt{hw.ex}). Physical access control systems query the CMDB and \texttt{zencrypted/ias} OCSP to validate smart-card credentials at the server-room mantrap in real time.
+
+\textbf{PE-2 --- Physical Access Authorizations.}
+Physical access to the server room and HSM storage area is controlled via a PKI-based electronic access control system. The authorized persons list is maintained as a CMDB record (\texttt{hw.ex} physical zone policy), cross-referenced with active \texttt{ias} accounts. A deactivated account automatically triggers removal from the physical access list within one synchronization cycle.
+
+\textbf{PE-3 --- Physical Access Control.}
+The server room enforces a mantrap entry with dual authentication: PKI smart card (verified against \texttt{synrc/ca} OCSP) plus biometric. The HSM area additionally requires dual-person integrity (two authorized persons must enter together) --- a physical enforcement of the Dual Control principle mandated for all cryptographic key operations.
+
+\textbf{PE-6 --- Monitoring Physical Access.}
+CCTV feeds from all access points are retained for 90 days. Motion events and access log entries are correlated by Wazuh: an access event without a corresponding \texttt{ias} login event (or vice versa) generates an anomaly alert, detecting tailgating, piggybacking, or account sharing.
+
+\textbf{PE-12 --- Emergency Lighting.}
+The data center is equipped with UPS (HPE R/T3000) and diesel generator backup power, documented in \texttt{hw.ex} as \texttt{ERP-PE-UPS-01} and \texttt{ERP-PE-GEN-01}. Emergency lighting and environmental monitoring (temperature, humidity, fire suppression status) feed into Zabbix, with threshold alerts routed to the on-call infrastructure team via \texttt{erpuno/itsm}.
+
+
+\newpage
+\newpage
+\newpage
+\section{Metainformational Security Profile}
+
+% ============================================================
+% LAYER 2: The Documentation and Governance Layer
+% This section captures organizational decisions (Layer 1) into
+% authoritative, machine-verifiable artifacts: security plans,
+% risk registries, data categorizations, privacy records.
+% The key principle: documentation IS code — generated from
+% the live CMDB state, never manually maintained.
+% Primary product: synrc/ca (CMDB, risk.ex, data.ex, roles.ex)
+% ============================================================
+
+The Metainformational Security Profile translates the organizational decisions established in Layer 1 into authoritative, machine-verifiable governance artifacts. Rather than static paper documents, ERP/1 expresses all security plans, risk taxonomies, data categorizations, and privacy records as live, version-controlled Elixir source code within \texttt{synrc/ca}. These artifacts are the formal bridge between organizational intent and technical enforcement: technical controls in Layer 3 enforce exactly what this layer documents, and this layer documents exactly what Layer 1 mandates.
+
+
+The Metainformational Security Profile covers the governance, planning, and programmatic documentation layer of ERP/1. These controls are realized through the CMDB paradigm: instead of static paper artifacts, all policy and risk information is expressed as live, version-controlled Elixir source code in \texttt{synrc/ca}. This makes the security documentation self-verifying, continuously synchronized with the deployed system, and automatically auditable by state regulators (\foreignlanguage{ukrainian}{ДССЗЗІ}) and international auditors (ISO/IEC 27001, NIST).
+
+% =========================================================
+\subsection{Planning (PL)}
+% =========================================================
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} implements the Planning controls (PL-2, PL-4, PL-8) for ERP/1 through the Documentation as Code (DaC) paradigm: the entire system security plan, rules of behavior, and security architecture are generated on demand from live CMDB modules (\texttt{mix run -e 'CA.TeX.gen\_bible()'}) and cryptographically signed as part of the L3 Target Security Profile.
+
+\textbf{PL-2 --- System Security and Privacy Plans.}
+The system security plan for ERP/1 is not a Word document filed in a binder. It is this very PDF report, generated on demand via \texttt{mix run -e 'CA.TeX.gen\_bible()'} from the live CMDB state. Every section --- hardware inventory, risk taxonomy, role definitions, network architecture --- is extracted programmatically, ensuring 100\% fidelity between documentation and deployed reality. The plan is updated automatically upon every git commit that changes a CMDB module.
+
+\textbf{PL-4 --- Rules of Behavior.}
+Acceptable use rules are defined declaratively in \texttt{roles.ex} and embedded as machine-readable OID extensions in X.509 certificates. Every certificate holder cryptographically acknowledges the rules of behavior by accepting and installing their certificate, creating an auditable, non-repudiable consent record stored in \texttt{kvs}.
+
+\textbf{PL-8 --- Security and Privacy Architectures.}
+The security architecture of ERP/1 is codified as the L3 Target Security Profile\footnote{\url{https://ca.n2o.dev/priv/legal_l3_profile_erp.pdf}}, generated from CMDB and cryptographically signed. Any deviation from the declared architecture is detectable by comparing the current CMDB state against the signed baseline, enabling automated drift detection.
+
+% =========================================================
+\subsection{Program Management (PM)}
+% =========================================================
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} CMDB materializes the Program Management controls (PM-2, PM-5, PM-6, PM-9) as Elixir source code: \texttt{roles.ex} defines security leadership roles enforced via X.509 extensions; \texttt{hw.ex} delivers a real-time machine-queryable hardware inventory; and \texttt{risk.ex} maintains the organizational risk management strategy as a structured, version-controlled registry.
+
+\textbf{PM-2 --- Information Security Program Leadership Roles.}
+The CMDB \texttt{roles.ex} module formally defines the organizational security roles: Security Administrator (\texttt{security\_admin}), Auditor (\texttt{auditor}), Registration Operator (\texttt{reg\_operator}), and Global Superadministrator (\texttt{global\_root\_admin}). These roles are not notional --- they are enforced cryptographically via X.509 certificate extensions and ABAC policies.
+
+\textbf{PM-5 --- System Inventory.}
+\texttt{CA.PRO.inventory/1} delivers a real-time, programmatically queryable hardware inventory (\texttt{hw.ex}), satisfying PM-5 in a machine-verifiable form. The inventory is linked to cryptographic certificates, so any undocumented asset lacks a valid mTLS credential and is automatically rejected by the platform.
+
+\textbf{PM-6 --- Measures of Performance.}
+Security performance metrics (control coverage ratios, incident counts, certificate expiration timelines) are extracted via \texttt{CA.PRO} queries and embedded in automatically generated PDF reports. This eliminates manual metric collection and guarantees that reported figures reflect the actual system state at the moment of report generation.
+
+\textbf{PM-9 --- Risk Management Strategy.}
+The organizational risk management strategy is materialized in \texttt{risk.ex} --- a structured registry of over 40 threat scenarios (RISK-OS-01 through RISK-DAT-02), each tagged to specific NIST control families. This ensures that every identified risk has a corresponding mapped control, and every unmapped risk generates a POA\&M entry tracked in \texttt{erpuno/itsm}.
+
+% =========================================================
+\subsection{Risk Assessment (RA)}
+% =========================================================
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} \texttt{risk.ex} implements the Risk Assessment family (RA-2, RA-3, RA-5) as a live, programmatic threat model. Data categorization (\texttt{data.ex}) automatically enforces cryptographic requirements per classification level, while the risk taxonomy cross-references Wazuh SIEM feeds and SBOM dependency scans to keep vulnerability records synchronized with the current system state.
+
+\textbf{RA-2 --- Security Categorization.}
+Data categorization for ERP/1 (Public, PII, Internal, Confidential) is encoded in \texttt{data.ex}. Each category is automatically coupled to mandatory cryptographic and access control requirements: PII data triggers PostgreSQL TDE + ABAC restrictions; Confidential data mandates HSM-backed encryption and air-gapped backup routing. Categorization is machine-enforced, not advisory.
+
+\textbf{RA-3 --- Risk Assessment.}
+The \texttt{risk.ex} module maintains a living threat model. Risks are classified by attack vector (OS, Crypto, Network, Infrastructure, Personnel, Synchronization, Data) and mapped to specific NIST control families. The taxonomy is re-evaluated on every system change: when a new hardware component appears in \texttt{hw.ex}, the risk engine automatically checks for unmitigated threats applicable to that component class.
+
+\textbf{RA-5 --- Vulnerability Monitoring and Scanning.}
+Vulnerability data from the \texttt{risk.ex} taxonomy is cross-referenced against the Wazuh SIEM feed and automated SBOM dependency scans in the CI/CD pipeline. Any newly disclosed CVE matching a component in \texttt{sys.ex} triggers an automatic risk record update and incident creation in \texttt{erpuno/itsm}.
+
+% =========================================================
+\subsection{System and Services Acquisition (SA)}
+% =========================================================
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} combined with the ERP/1 CI/CD pipeline implements the System and Services Acquisition controls (SA-5, SA-9, SA-11). All system documentation is generated programmatically; all external service dependencies are declared in \texttt{sys.ex} CMDB; and every artifact undergoes automated SBOM generation, OWASP Dependency Check, and cryptographic signature verification before reaching the production registry.
+
+\textbf{SA-5 --- System Documentation.}
+The cornerstone of the ERP/1 metainformational approach is the "Documentation as Code" (DaC) paradigm. The entire \foreignlanguage{ukrainian}{КСЗІ} documentation package --- security plans, asset registries, risk matrices, network diagrams, this PDF --- is generated from live Elixir source code. The command \texttt{mix run} produces a complete, audit-ready documentation set. Documentation is never manually edited; it is always a faithful projection of the code state.
+
+\textbf{SA-9 --- External System Services.}
+All external services used by ERP/1 (TSA providers for RFC 3161, OCSP endpoints, external IdP federation) are formally declared in \texttt{sys.ex} CMDB with their security classification, interface type, and contractual agreements. Undeclared external dependencies are blocked at the mTLS boundary, since they cannot possess a certificate issued by \texttt{synrc/ca}.
+
+\textbf{SA-11 --- Developer Testing and Evaluation.}
+All ERP/1 components undergo automated security testing at the CI/CD pipeline level: SBOM generation, OWASP Dependency Check, static analysis (Credo), and cryptographic signature verification before any artifact reaches the production registry. Test results are stored as CMDB events and are queryable by auditors.
+
+% =========================================================
+\subsection{Privacy (PT)}
+% =========================================================
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} Certificate Practice Statement (CPS) implements the Privacy controls (PT-2, PT-4, PT-6). Legal authority for processing personal data is declared in the CPS and embedded as OIDs in every issued certificate. Subscriber consent is captured as a digitally signed XAdES-BES record stored in \href{https://github.com/synrc/kvs}{\texttt{synrc/kvs}} with an RFC 3161 timestamp for legal non-repudiation.
+
+\textbf{PT-2 --- Authority to Process Personally Identifiable Information.}
+The legal basis and specific purposes for processing personal data (subscriber registry: passport data, RNOKPP) are declared in the Certificate Practice Statement (CPS), published at \url{https://ca.n2o.dev}. The CPS is a legally binding document, version-controlled in Git, and referenced by OID in every issued certificate.
+
+\textbf{PT-4 --- Consent Management.}
+Every subscriber provides a digitally signed consent form (XAdES-BES) during the registration process. This consent is stored in \texttt{kvs} as an immutable event, preserving the exact scope of consent accepted, the version of the CPS in force at the time, and the timestamp (RFC 3161). This provides legally valid evidence of informed consent for the entire duration of the certificate's validity.
+
+\textbf{PT-6 --- Disassociation.}
+Upon subscriber request or legal obligation, personal data is pseudonymized or erased from the active database. The immutable audit log in \texttt{kvs} retains only the cryptographic hash of the erased record and the legal basis for the erasure, satisfying both the right to erasure and the obligation to maintain an audit trail of security-relevant events.
+
+\subsection{Security Evaluation Framework (CMDB)}
+The following sections provide the complete execution traces of the CMDB profile extraction for the "ERP" system.
+These outputs demonstrate how the infrastructure is documented, maintained, and continuously monitored.
+
+\subsubsection{Risk Assessment (CA.PRO.risk)}
+The risk taxonomy enumerates the identified threats and binds them to the corresponding security control families.
+{\scriptsize
+\selectlanguage{ukrainian}
+\begin{verbatim}
+iex> CA.PRO.risk("ERP")
+[
+  {"RISK-OS-01", "Вразливості Active Directory (Kerberoasting, Pass-the-Hash, Golden Ticket)", ["AC", "IA", "SC"]},
+  {"RISK-OS-02", "Зловживання WMI та PowerShell (Fileless-методи)", ["SI", "SC", "CM"]},
+  {"RISK-OS-03", "Вразливості на рівні ядра (BYOVD, Ring 0)", ["SI", "CM"]},
+  {"RISK-OS-04", "Маніпуляція маркерами доступу (Token Stealing)", ["AC", "AU"]},
+  {"RISK-OS-05", "Некоректні дозволи NTFS / Share (Orphaned SIDs)", ["AC", "CM"]},
+  {"RISK-OS-06", "Підвищення привілеїв Linux (Kernel, SUID, Dirty COW)", ["AC", "SI"]},
+  {"RISK-OS-07", "Втеча з контейнерів Docker/Kubernetes", ["SC", "CM"]},
+  {"RISK-OS-08", "Зловживання eBPF (прихований моніторинг)", ["AU", "SI"]},
+  {"RISK-OS-09", "Ін'єкції динамічних бібліотек (LD_PRELOAD)", ["SI", "CM"]},
+  {"RISK-OS-10", "Вразливості PAM (обхід автентифікації)", ["IA", "AC"]},
+  {"RISK-OS-11", "Обхід XProtect / Gatekeeper / SIP (macOS)", ["CM", "SI"]},
+  {"RISK-OS-12", "Компрометація macOS Keychain", ["IA", "SC"]},
+  {"RISK-OS-13", "TCC Bypass & Spyware (macOS)", ["SI", "PE"]},
+  {"RISK-OS-14", "Dyld Hijacking (macOS)", ["SI"]},
+  {"RISK-OS-15", "Обхід Pointer Authentication PAC (Apple Silicon)", ["SI", "SA"]},
+  {"RISK-CRY-01", "Пост-квантові загрози SNDL (Store Now, Decrypt Later)", ["SC", "RA", "SA"]},
+  {"RISK-CRY-02", "Атаки сторонніми каналами (DPA, таймінг, EM)", ["SC", "PE", "SA"]},
+  {"RISK-CRY-03", "Fault Injection (Glitching, Voltage Drop)", ["PE", "SI", "SC"]},
+  {"RISK-CRY-04", "Компрометація ПАК «Гряда» (ІІТ HSM)", ["PE", "SC", "AC"]},
+  {"RISK-CRY-05", "Екстракція ключів з НКІ е-Токен (ІІТ)", ["PE", "SC"]},
+  {"RISK-CRY-06", "Вразливості ASN.1 парсерів X.509 / CMS", ["SI", "SA"]},
+  {"RISK-CRY-07", "Вразливості криптобібліотек (Калина, Купина, Padding Oracle)", ["SA", "SI"]},
+  {"RISK-CRY-08", "Недостатня ентропія генератора псевдовипадкових чисел (PRNG)", ["SC"]},
+  {"RISK-CRY-09", "Втрата або перехоплення PIN-кодів HSM (кейлогери)", ["IA", "AT", "PE"]},
+  {"RISK-CRY-10", "Фізична деструкція носіїв «Автор» (CryptoCard)", ["PE", "MP"]},
+  {"RISK-CRY-11", "Вразливості CCID драйверів токенів (ескалація привілеїв)", ["SI", "CM"]},
+  {"RISK-CRY-12", "Підміна сесій PKCS#11 (MitM між ПЗ ЦСК та HSM)", ["SC", "SI"]},
+  {"RISK-NET-01", "BGP Hijacking & Route Leaks (підміна анонсів AS)", ["SC", "SI"]},
+  {"RISK-NET-02", "Атаки L2 (VLAN Hopping, ARP Spoofing, STP атаки)", ["SC", "AC"]},
+  {"RISK-NET-03", "Вразливості IPSec / VPN (IKE downgrade, PSK витік)", ["SC", "IA"]},
+  {"RISK-NET-04", "DDoS (Slowloris, SYN Flood, ампліфікація DNS/NTP)", ["SC", "IR"]},
+  {"RISK-NET-05", "Компрометація Wi-Fi (KRACK, PMKID, Evil Twin)", ["SC", "IA"]},
+  {"RISK-NET-06", "Вразливості DNSSEC (DNS Spoofing, помилки конфігурації)", ["SC", "SI"]},
+  {"RISK-NET-07", "Відкриті інтерфейси управління (SNMPv1/v2, Telnet, REST API)", ["CM", "AC", "SC"]},
+  {"RISK-INF-01", "Компрометація BMC (IPMI, iDRAC, iLO)", ["AC", "SC"]},
+  {"RISK-INF-02", "Вразливості Firmware / UEFI Bootkits", ["SI", "SA"]},
+  {"RISK-INF-03", "Атаки на мікроархітектуру CPU (Spectre, Meltdown)", ["SI", "SC"]},
+  {"RISK-INF-04", "Cold Boot & Rowhammer атаки на пам'ять", ["PE", "SI"]},
+  {"RISK-INF-05", "Відмова дискових масивів SAN/NAS (Split-brain)", ["CP", "SI"]},
+  {"RISK-INF-06", "Електромагнітне випромінювання TEMPEST", ["PE", "SC"]},
+  {"RISK-INF-07", "Відмова інженерних систем (UPS, дизель, чиллер, пожежогасіння)", ["PE", "CP"]},
+  {"RISK-PER-01", "Spear Phishing & Whaling (цільовий фішинг адміністраторів)", ["AT", "IR", "SI"]},
+  {"RISK-PER-02", "Watering Hole Attacks (компрометація профільних ресурсів)", ["SI", "AT"]},
+  {"RISK-PER-03", "Інсайдерський саботаж та ексфільтрація (логічні бомби)", ["PS", "AU", "AC"]},
+  {"RISK-PER-04", "Pretexting / Baiting / Tailgating (фізичний доступ)", ["AT", "PE", "PS"]},
+  {"RISK-PER-05", "Credential Stuffing (словники та бази паролів)", ["IA", "AT"]},
+  {"RISK-SYNC-01", "Race Condition (стан гонитви у спільних ресурсах)", ["SI", "SA"]},
+  {"RISK-SYNC-02", "TOCTOU (Time-of-Check to Time-of-Use)", ["SI", "AC"]},
+  {"RISK-SYNC-03", "NTP Spoofing (десинхронізація часу)", ["SC", "AU", "SI"]},
+  {"RISK-SYNC-04", "Split-Brain у кластерах СУБД", ["CP", "SI"]},
+  {"RISK-SYNC-05", "Replication Lag (вікно доступу до застарілих даних)", ["SI", "SC"]},
+  {"RISK-DAT-01", "Втрата резервних копій (Ransomware, Backup Corruption)", ["CP", "MP", "SI"]},
+  {"RISK-DAT-02", "Витік електронних судових справ (несанкціонований доступ)", ["AC", "SC", "PE"]}
+]
+\end{verbatim}
+\selectlanguage{english}
+}
+
+\subsubsection{System Software Components (CA.PRO.sys)}
+The system inventory documents all OS, middleware, platform, and application-level software
+components running in the environment, satisfying NIST CM-8 and PM-5.
+{\scriptsize
+\selectlanguage{ukrainian}
+\begin{verbatim}
+iex> CA.PRO.sys("ERP")
+[
+  {"SYS-OS-01-UAL", "UA Linux 24.04 LTS (DSTU-hardened}, SELINUX Enforcing) (24.04 LTS)", []},
+  {"SYS-OS-01-WIN", "Windows Server 2025 Datacenter (NATO STIG + DISA hardened) (2025 Datacenter)", []},
+  {"SYS-OS-01-ESX", "VMware ESXi 8.0 Update 3 (vSphere Foundation) (8.0 U3)", []},
+  {"SYS-OS-02-W11", "Windows 11 Pro 24H2 (DISA STIG + Windows Defender Credential Guard) (24H2 (Build 26100))", []},
+  {"SYS-OS-02-UAL", "UA Linux Desktop 24.04 LTS (GNOME Hardened) (24.04 LTS Desktop)", []},
+  {"SYS-APP-00-ERL", "Erlang/OTP 27.3 (SMP, BEAM VM, distribution TLS) (27.3)", []},
+  {"SYS-APP-00-ELX", "Elixir 1.18.3 (N2O, NITRO, FORM, Bandit) (1.18.3)", []},
+  {"SYS-APP-00-EMQ", "EMQ X 2.12 (MQTT 5.0 / MQTT-SN, Erlang/OTP cluster) (2.12)", []},
+  {"SYS-SYNRC-CA", "Сертифікати (7.4)", []},
+  {"SYS-SYNRC-VPN", "Тунелі (1.0)", []},
+  {"SYS-SYNRC-LDAP", "Директорія (1.0)", []},
+  {"SYS-SYNRC-CHAT", "Комунікатор (4.2)", []},
+  {"SYS-SYNRC-BPMN", "Процеси (6.11)", []},
+  {"SYS-SYNRC-MQTT", "Брокер (2.12)", []},
+  {"SYS-SYNRC-KVS", "Сховище (10.0)", []},
+  {"SYS-SYNRC-WS", "Фреймворк (11.0)", []},
+  {"SYS-SYNRC-FORM", "Форми (1.3)", []},
+  {"SYS-SYNRC-ASN1", "Компілятор (1.0)", []},
+  {"SYS-SYNRC-ABAC", "Контроль (1.0)", []},
+  {"SYS-ERP-EDU", "Освіта (1.0)", []},
+  {"SYS-ERP-HEALTH", "Здоров'я (1.0)", []},
+  {"SYS-ERP-MAIL", "Документи (1.0)", []},
+  {"SYS-ERP-ACC", "Облік (1.0)", []},
+  {"SYS-ERP-WAREHOUSE", "Склад (1.0)", []},
+  {"SYS-ERP-CART", "Реєстри (1.0)", []},
+  {"SYS-APP-01-IIT", "ІІТ Користувач ЦСК-1 (бібліотека «IIT Gryada-301») (3.0.1)", []},
+  {"SYS-APP-01-CIP", "Сайфер HSM Middleware (PKCS#11 + CMS + TSP клієнт) (2.8)", []},
+  {"SYS-APP-01-SIGN", "Автор Е-Підпис Сервер (batch signing, LTV, XAdES-BES) (5.2)", []},
+  {"SYS-APP-02-WZ", "Wazuh 4.9 SIEM/XDR (OSSEC-based, FIM, compliance CIS/NIST) (4.9)", []},
+  {"SYS-APP-02-ZBX", "Zabbix 7.2 (active agents, encrypted PSK transport, alerting) (7.2 LTS)", []},
+  {"SYS-DB-01-PG", "PostgreSQL 17.2 (TDE + pgAudit + pg_partman) (17.2)", []},
+  {"SYS-DB-01-ORA", "Oracle Database 23ai (Advanced Security Option, TDE, Vault) (23ai (23.5))", []},
+  {"SYS-DB-02-RDS", "Redis 7.4 (TLS 1.3, ACL, persistence RDB+AOF) (7.4)", []},
+  {"SYS-INF-01-VBR", "Veeam Backup & Replication 12.3 (immutable backups, SureBackup) (12.3)", []},
+  {"SYS-INF-01-BCL", "Bacula Community 15.0 (offline tape + air-gapped archive) (15.0)", []},
+  {"SYS-MW-01-NGX", "Nginx 1.27 (TLS 1.3 only, OCSP Stapling, CT Logs, HSTS) (1.27)", []},
+  {"SYS-MW-01-HAP", "HAProxy 3.0 (HA pair, health checks, rate limiting) (3.0 LTS)", []},
+  {"SYS-MW-02-IPA", "FreeIPA 4.12 (Kerberos V, OTP, CA sub-ідентифікатор) (4.12)", []}
+]
+\end{verbatim}
+\selectlanguage{english}
+}
+
+\subsubsection{Hardware Inventory (CA.PRO.inventory)}
+The hardware inventory explicitly tracks physical assets, cryptographic modules (HSMs), network appliances, and storage arrays.
+{\scriptsize
+\selectlanguage{ukrainian}
+\begin{verbatim}
+iex> CA.PRO.inventory("ERP")
+[
+  {"ERP-STG-01", "ERP-STG-2025-001", "5HT Technology AllFlash NVMe Array (Sapphire Rapids Storage Controller)"},
+  {"ERP-STG-02", "ERP-STG-2025-002", "5HT Technology AllFlash NVMe Array"},
+  {"ERP-TAPE-01", "ERP-STG-2025-003", "HPE StoreEver MSL3040 Tape Library"},
+  {"ERP-WS-01", "ERP-WS-2025-001", "5HT Technology Workstation Compact (Sapphire Rapids)"},
+  {"ERP-WS-02", "ERP-WS-2025-002", "5HT Technology Workstation Compact (Sapphire Rapids)"},
+  {"ERP-KZI-01", "ERP-KZI-2025-001", "IIT Gryada-301 PCIe HSM"},
+  {"ERP-KZI-02", "ERP-KZI-2025-002", "IIT Gryada-301 PCIe HSM"},
+  {"ERP-KZI-03", "ERP-KZI-2025-003", "Автор CryptoCard Smart-01 (е-Токен, Смарт-карта)"},
+  {"ERP-NET-01", "ERP-NET-2025-001", "Cisco Catalyst 9500-48Y4C"},
+  {"ERP-NET-02", "ERP-NET-2025-002", "Cisco Catalyst 9500-48Y4C"},
+  {"ERP-NET-03", "ERP-NET-2025-003", "Cisco ASR 1002-HX Router"},
+  {"ERP-FW-01", "ERP-NET-2025-004", "Cisco Firepower 4145 NGFW (FTD 7.6)"},
+  {"ERP-FW-02", "ERP-NET-2025-005", "Cisco Firepower 4145 NGFW (FTD 7.6)"},
+  {"ERP-SRV-01", "ERP-2025-001", "5HT Technology Tristellar 3U"},
+  {"ERP-SRV-02", "ERP-2025-002", "5HT Technology Tristellar 3U"},
+  {"ERP-SRV-03", "ERP-2025-003", "5HT Technology Quadstellar 4U"},
+  {"ERP-SRV-04", "ERP-2025-004", "5HT Technology Quadstellar 4U"},
+  {"ERP-SRV-05", "ERP-2025-005", "5HT Technology Tristellar 3U"},
+  {"ERP-SRV-06", "ERP-2025-006", "5HT Technology Tristellar 3U"},
+  {"ERP-SRV-07", "ERP-2025-007", "5HT Technology Tristellar 3U"},
+  {"ERP-SRV-08", "ERP-2025-008", "5HT Technology Tristellar 3U"}
+]
+\end{verbatim}
+\selectlanguage{english}
+}
+
+\subsubsection{Role-Based Access Control (CA.PRO.roles)}
+The defined roles establish the baseline for the Attribute-Based Access Control (ABAC) and Role-Based Access Control (RBAC) mechanisms.
+{\scriptsize
+\selectlanguage{ukrainian}
+\begin{verbatim}
+iex> CA.PRO.roles("ERP")
+[
+  {"ROLE-ADM-01", "Адміністратор безпеки", ["security_admin"]},
+  {"ROLE-AUD-01", "Аудитор", ["auditor"]},
+  {"ROLE-OPR-01", "Оператор реєстрації", ["reg_operator"]},
+  {"ROLE-SYS-01", "Системний процес (Machine-to-Machine)", ["ocsp_service", "crl_generator"]},
+  {"ROLE-SADM-01", "Глобальний суперадміністратор (root/administrator)", ["global_root_admin", "infra_super_user"]}
+]
+\end{verbatim}
+\selectlanguage{english}
+}
+
+\subsubsection{Data Categorization (CA.PRO.data)}
+Data categorization ensures that sensitive information (e.g., PII, keys) is stored in the appropriate encypted and access-controlled repositories.
+{\scriptsize
+\selectlanguage{ukrainian}
+\begin{verbatim}
+iex> CA.PRO.data("ERP")
+[
+  {"DATA-PUB-01", "Публічні сертифікати та CRL", "Public CDN / web server"},
+  {"DATA-PUB-02", "Політики ЦСК (CPS, CP)", "Public web server"},
+  {"DATA-PII-01", "Реєстр підписників (паспорти, РНОКПП)", "Encrypted DB (PostgreSQL)"},
+  {"DATA-PII-02", "Адресні та контактні дані підписників", "Encrypted DB (PostgreSQL)"},
+  {"DATA-INT-01", "Внутрішні накази та регламенти", "Internal file server"},
+  {"DATA-INT-02", "Журнали аудиту (SIEM logs)", "SIEM (Elasticsearch)"},
+  {"DATA-KEY-01", "Кореневі та підпорядковані ключі ЦСК", "HSM (Гряда / IIT)"},
+  {"DATA-KEY-02", "Паролі та секрети адміністраторів", "Password Manager (Vault)"},
+  {"DATA-CRT-01", "Матеріали судових проваджень та ухвали", "Encrypted DB (Oracle / PostgreSQL)"},
+  {"DATA-CRT-02", "Електронні докази (обмежений доступ)", "Encrypted storage (Scality RING)"},
+  {"DATA-BKP-01", "Снапшоти БД та образи ВМ", "Tape Library (MSL3040)"},
+  {"DATA-BKP-02", "Офлайн-архіви судових документів", "Air-gapped Tape (offline)"}
+]
+\end{verbatim}
+\selectlanguage{english}
+}
+
+\subsubsection{Business Processes (CA.PRO.proc)}
+The documentation of business processes connects operational workflows with their responsible actors, ensuring accountability.
+{\scriptsize
+\selectlanguage{ukrainian}
+\begin{verbatim}
+iex> CA.PRO.proc("ERP")
+[
+  {"PROC-CERT-01", "Видача кваліфікованих сертифікатів", "Оператор реєстрації ЦСК"},
+  {"PROC-OCSP-01", "Формування OCSP-відповідей (24/7)", "Автоматичний сервіс ЦСК"},
+  {"PROC-AUDIT-01", "Логування та моніторинг подій безпеки", "Адміністратор безпеки / SIEM"},
+  {"PROC-ROOT-01", "Церемонія генерації кореневого ключа", "Комісія ЦСК (Dual Control)"},
+  {"PROC-DOC-01", "Реєстрація та розгляд судових справ", "Судова влада України / ДП ІСС"},
+  {"PROC-BKP-01", "Резервне копіювання та відновлення", "Адміністратор резервного копіювання"}
+]
+\end{verbatim}
+\selectlanguage{english}
+}
+
+\subsubsection{Network Architecture (CA.PRO.net)}
+The network segmentation profile details the logical separation of DMZ, internal, management, and air-gapped zones to prevent lateral movement.
+{\scriptsize
+\selectlanguage{ukrainian}
+\begin{verbatim}
+iex> CA.PRO.net("ERP")
+[
+  {"NET-DMZ-01", "OCSP / CRL публічний ендпоінт", "публічна підмережа"},
+  {"NET-DMZ-02", "Веб-портал ЦСК", "публічна підмережа"},
+  {"NET-INT-01", "Сегмент серверів БД", "внутрішня підмережа БД"},
+  {"NET-INT-02", "Сегмент робочих станцій операторів", "внутрішня підмережа АРМ"},
+  {"NET-MGT-01", "VLAN IPMI / iLO адміністрування", "management VLAN"},
+  {"NET-AIR-01", "Кореневий ЦСК (офлайн вузол)", "N/A"}
+]
+\end{verbatim}
+\selectlanguage{english}
+}
+
+
+\newpage
+\section{Technical Security Profile}
+
+% ============================================================
+% LAYER 3: The Technical Enforcement Layer
+% This section implements the controls that Layers 1 and 2 define.
+% Every cryptographic mechanism, access policy, and audit trail
+% here enforces a specific organizational procedure (Layer 1)
+% documented in a specific governance artifact (Layer 2).
+% Primary products: zencrypted/ias, erpuno/abac, synrc/vpn,
+%   synrc/kvs, synrc/chat, erlang/otp, synrc/ca
+% ============================================================
+
+The Technical Security Profile implements the enforcement mechanisms that the organizational procedures of Layer 1 mandate and the governance documentation of Layer 2 describes. Every control in this section is traceable: \texttt{AC-2} enforces the personnel lifecycle defined in PS-4 and documented in PM-2; \texttt{AU-12} enforces the audit event catalog defined in AU-2 policy and encoded in the CMDB. The ERP/1 architecture ensures that no technical control exists without organizational ownership, and no organizational policy exists without technical enforcement.
+
+
+The following section is a comprehensive, control-by-control scientific analysis of how the components of the ERP/1 platform (ecosystem \texttt{ERP.UNO}, \texttt{N2O.DEV}, \texttt{SYNRC.COM}) naturally and architecturally satisfy the requirements of NIST SP 800-53 Rev.5 and \foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}} 2.3-025-24}.
+Each platform product is a purpose-built solution for a specific security domain, enabling maximally organic --- without artificial mappings --- standard compliance. The analysis covers all 20 control families: AC, AT, AU, CA, CM, CP, IA, IR, MA, MP, PE, PL, PM, PS, PT, RA, SA, SC, SI, SR.
+
+% =========================================================
+\subsection{Access Control (AC)}
+% =========================================================
+\href{https://github.com/zencrypted/ias}{\texttt{zencrypted/ias}} is the primary account management engine for ERP/1 (AC-2). It provides a full identity lifecycle (create, modify, disable, remove), enforces separation of duties via role constraints, and integrates with \href{https://github.com/synrc/ca}{\texttt{synrc/ca}} to issue and revoke X.509 certificates bound to each account.
+
+The \texttt{ias} server (Identity and Access Server) is the platform's central Identity Provider (IdP), implementing the full account lifecycle through a single programmatic interface. Unlike fragmented LDAP directories, \texttt{ias} operates with declarative user profiles directly bound to the role registry in \texttt{roles.ex}.
+
+\textbf{AC-2(1) --- Automated System Account Management.}
+\texttt{ias} supports SCIM 2.0 (System for Cross-domain Identity Management) for automatic synchronization of account state across subsystems. When an event arrives from an HR module (e.g., ERP/EDU or ERP/HEALTH), \texttt{ias} automatically performs provisioning or de-provisioning without manual intervention, guaranteeing compliance with the Joiner-Mover-Leaver (JML) requirements.
+
+\textbf{AC-2(2) --- Removal of Temporary and Emergency Accounts.}
+Temporary accounts in \texttt{ias} have mandatory fields \texttt{expires\_at} and \texttt{account\_type: :temporary}. A background scheduler (implemented via Erlang/OTP \texttt{:timer}) inspects the database hourly and automatically deactivates expired records. Setting an expiration time is a required parameter when creating a temporary account.
+
+\textbf{AC-2(3) --- Disable Inactive Accounts.}
+The \texttt{ias} server stores a \texttt{last\_seen\_at} timestamp for each session. If the value exceeds a configurable threshold (default: 90 days), the account is transitioned to the \texttt{:inactive} state, with an automatic notification sent to the security administrator.
+
+\textbf{AC-2(4) --- Automated Audit Actions.}
+Any change in account state (creation, privilege modification, deactivation, deletion) generates a signed record in the \texttt{kvs} audit log via event sourcing. This provides an immutable, cryptographically protected trail of all administrative actions.
+
+\textbf{AC-2(5) --- Inactivity Logout.}
+\texttt{ias} centrally manages session duration. The \texttt{session\_idle\_timeout} setting is a global parameter and can be overridden at the role level (e.g., a stricter 15-minute limit for administrators).
+
+\textbf{AC-2(6) --- Dynamic Privilege Management.}
+Since \texttt{ias} is integrated with \texttt{erpuno/abac}, privileges are not static profile attributes but dynamically computed decisions from the Policy Decision Point. This means elevated privileges (e.g., administrator mode for critical operations) are activated only for the duration of a specific session and for a specific resource.
+
+\textbf{AC-2(7) --- Role-Based Schemes.}
+The integration of \texttt{ias} with \texttt{roles.ex} allows roles to be organized hierarchically (RBAC). Role templates are inherited: the \texttt{auditor} role automatically receives all rights of the parent \texttt{read\_only} role, without requiring duplication of rules.
+
+\textbf{AC-2(8) --- Dynamic Account Management.}
+For service accounts (machine-to-machine), \texttt{ias} supports OAuth 2.0 Client Credentials with short-lived tokens (TTL: 15 minutes). Services have no permanent password, eliminating the risk of long-term secret leakage.
+
+\textbf{AC-2(9) --- Restrictions on Use of Shared and Group Accounts.}
+The \texttt{ias} architecture does not allow creating "shared" accounts by default. Every subject --- person or service --- has a unique cryptographic identifier bound to an X.509 certificate issued by \texttt{synrc/ca}.
+
+\textbf{AC-2(10) --- Shared and Group Account Credential Change.}
+For technical group accounts (e.g., \texttt{ocsp\_service}), \texttt{ias} implements a "secret rotation" mechanism triggered by every change in group membership, automatically generating a new key pair via \texttt{synrc/ca}.
+
+\textbf{AC-2(11) --- Usage Conditions.}
+Upon login, \texttt{ias} checks the currency of accepted terms of use. If the \texttt{terms\_of\_service\_version} in the profile does not match the current version, access is blocked until the new terms are accepted.
+
+\textbf{AC-2(12) --- Account Monitoring for Atypical Usage.}
+Behavioral metrics (request frequency, geography, unusual hours) are aggregated by \texttt{ias} and forwarded to SIEM (Wazuh). When the behavioral baseline is exceeded, an incident is automatically created in \texttt{erpuno/itsm}.
+
+\textbf{AC-2(13) --- Disable Accounts of High-Risk Individuals.}
+SIEM integration allows \texttt{ias} to receive webhook signals about compromise. Upon receiving a \texttt{high\_risk\_account\_detected} signal, the corresponding profile is transitioned to \texttt{:suspended} within one second, regardless of any currently active sessions.
+
+\href{https://github.com/zencrypted/ias}{\texttt{zencrypted/ias}} enforces lockout policy (AC-7): configurable consecutive failure thresholds trigger automatic account locking, SIEM alerting, and optionally step-up MFA prompts on the next successful authentication.
+\textbf{AC-7 (Base Control).}
+\texttt{ias} maintains a counter of failed authentication attempts bound to the subject and IP address. After a configurable threshold (default: 5 attempts in 10 minutes), the account is temporarily locked (account lockout) with an automatic notification to the administrator.
+
+\textbf{AC-7(2) --- Purge or Wipe Mobile Device.}
+Upon receiving a signal from a Mobile Device Management (MDM) system about device theft or compromise, \texttt{ias} immediately revokes all tokens and certificates associated with that device via the OCSP revocation mechanism in \texttt{synrc/ca}.
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} implements the Reference Monitor (AC-3, AC-25) for ERP/1. Every service-to-service and user-to-service request is validated against ABAC policies before any resource access is permitted; there is no pathway around this enforcement point.
+
+The \texttt{synrc/ca} module implements the Reference Monitor (AC-25) --- a centralized control mechanism that verifies every request to a protected resource based on X.509 certificates and ABAC policies.
+
+\textbf{AC-3(3) --- Mandatory Access Control.}
+\texttt{synrc/ca} supports data classification labels (Data Labels) in X.509 certificate extensions. This enables enforcement of the Mandatory Access Control (MAC) principle: a certificate with a \texttt{confidential} clearance level cannot access a resource labeled \texttt{secret}, even if an RBAC rule formally permits it.
+
+\textbf{AC-3(4) --- Discretionary Access Control.}
+Resource owners can delegate access rights via the attributed token mechanism of \texttt{ias}, implementing the classic DAC (Discretionary Access Control) model. Delegation is always bounded by the delegating subject's own permissions.
+
+\textbf{AC-3(7) --- Role-Based Access Control.}
+RBAC is implemented at the X.509 extension level, where the \texttt{SubjectAlternativeName} field contains role URNs. This means a role is cryptographically bound to a person and confirmed by the digital signature of the root CA, making forgery or substitution of a role technically impossible.
+
+\textbf{AC-3(10) --- Audited Override of Access Control Mechanisms.}
+For services using JWT or SAML, \texttt{ias} generates signed claims with a time-limited validity. \texttt{synrc/ca} acts as the authority issuing short-lived assertion tokens whose verification requires no query to the IdP (stateless verification).
+
+\textbf{AC-3(11) --- Restrict Access to Specific Information Types.}
+Isolation between ERP/1 tenants (e.g., between different courts or agencies) is implemented at the Kubernetes namespace level and through unique root certificates for each tenant, issued by \texttt{synrc/ca}.
+
+\textbf{AC-3(12) --- Assert and Enforce Application Access.}
+The \texttt{abac} access decision incorporates a set of attributes: \texttt{subject.role}, \texttt{subject.clearance}, \texttt{resource.classification}, \texttt{action.type}, \texttt{environment.time}, \texttt{environment.network\_zone}. This ensures context-aware access in accordance with the Zero Trust principle.
+
+\textbf{AC-3(13) --- Attribute-Based Access Control.}
+Subject attributes are stored in \texttt{ias} and \texttt{synrc/ca}; resource attributes in KVS metadata. \texttt{abac} retrieves them at decision time, guaranteeing attribute freshness even under frequent context changes.
+
+\textbf{AC-3(15) --- Discretionary and Mandatory Access Control.}
+The system supports the simultaneous operation of two models: MAC (based on classification labels in X.509) and DAC (delegation via \texttt{ias}). MAC always takes priority: if a mandatory label denies access, a DAC rule cannot override it.
+
+\href{https://github.com/synrc/bpmn}{\texttt{synrc/bpmn}} enforces information flow control (AC-4) for ERP/1 business processes. Data flows between organizational units, external partners, and system components are modeled as BPMN lanes with explicit boundary controls; unauthorized cross-boundary flows are technically blocked by the process engine.
+
+The BPMN engine \texttt{synrc/bpmn} is the central orchestrator of business processes, and all information flows between platform components pass through it.
+
+\textbf{AC-4 (Base Control).}
+Every data transition between business process tasks (BPMN Tasks) is a controlled event. \texttt{bpmn} implements "information gateways" --- process nodes that verify data classification before transfer between network segments or tenants.
+
+\textbf{AC-4(1) --- Object Security and Privacy Attributes.}
+Artifacts (documents, case files) passed between tasks carry a mandatory \texttt{data\_classification} attribute. The BPMN gateway rejects the transfer if the artifact's classification does not match the permitted level of the target process segment.
+
+\textbf{AC-4(4) --- Flow Control of Encrypted Information.}
+At boundaries between organizational units, \texttt{bpmn} performs schema validation of transferred documents (JSON Schema, XSD) and verification of CMS/XAdES signatures before continuing the process.
+
+\href{https://github.com/erpuno/abac}{\texttt{erpuno/abac}} implements Separation of Duties and Least Privilege (AC-5, AC-6) for ERP/1. Attribute-Based Access Control policies are evaluated at the application boundary; conflicting role combinations are defined as constraints and are technically impossible to activate simultaneously.
+
+\textbf{AC-5 --- Separation of Duties.}
+\texttt{abac} implements Separation of Duties (SoD) via declarative XACML-like rules specifying sets of mutually exclusive roles (SSD: Static Separation of Duties). For example, the same individual cannot hold both the \texttt{initiator} and \texttt{approver} roles for financial transactions. SoD rules are verified not only at action execution but also at role assignment --- the system rejects an assignment that would create a conflict.
+
+\textbf{AC-6 --- Least Privilege.}
+The fundamental principle of \texttt{abac}: access is denied by default (Default Deny). Permission is granted only when an explicit, positive matching rule exists. Rules have the minimum necessary scope --- bound to a specific resource, action, and context.
+
+\textbf{AC-6(1) --- Authorize Access to Security Functions.}
+Instead of static privilege grants, \texttt{abac} computes privileges dynamically based on current subject and context attributes. Elevated rights (e.g., BreakGlass mode operations) are temporary and automatically revoked after the critical operation completes.
+
+\textbf{AC-6(2) --- Non-Privileged Access for Non-Security Functions.}
+\texttt{abac} ensures that administrative roles (e.g., \texttt{security\_admin}) do not have access to business functions (court records, medical data) by default. The security administrator administers \textit{the system}, not \textit{the data} of the system.
+
+\textbf{AC-6(3) --- Network Access to Privileged Commands.}
+Privileged commands (service restarts, configuration changes) are accessible only via a dedicated Management VLAN, not through the general network interface. \texttt{abac} checks the \texttt{environment.network\_zone} attribute in every request.
+
+\textbf{AC-6(4) --- Separate Processing Domains.}
+For example, a CA registration operator may \textit{submit} a certificate request, but only the CA administrator may \textit{sign} it. This two-stage approval (Maker/Checker) is hard-coded in the BPMN process and ABAC rules.
+
+\textbf{AC-6(5) --- Privileged Accounts.}
+The list of privileged accounts (e.g., \texttt{global\_root\_admin}) is defined in \texttt{roles.ex} and subject to monthly audit (control AC-2(12)). The number of subjects in this group is minimized and documented.
+
+\textbf{AC-6(7) --- Review of User Privileges.}
+Quarterly, \texttt{ias} automatically generates a \texttt{privileged\_access\_review\_report} listing all subjects with elevated rights, last-login dates, and anomalies. The report is forwarded to the CISO.
+
+\textbf{AC-6(9) --- Log Use of Privileged Functions.}
+Every execution of a privileged action is logged as a separate record in \texttt{kvs} with full context: subject, role, action, time, IP, hash of the executed command. These records are \textit{immutable} due to the append-only nature of KVS.
+
+\textbf{AC-6(10) --- Prohibit Non-Privileged Users from Executing Privileged Functions.}
+Technically enforced through the combination of ABAC rules and X.509 cryptographic mandates: privileged API endpoints require the presence of a specific OID extension in the certificate, which is issued only upon explicit assignment of a privileged role.
+
+
+% =========================================================
+\subsection{Audit and Accountability (AU)}
+% =========================================================
+
+\href{https://github.com/zencrypted/ias}{\texttt{zencrypted/ias}} is the primary audit event source for ERP/1 (AU-2, AU-3, AU-6, AU-9, AU-10, AU-12). All security-relevant events — logins, failures, privilege changes, certificate operations — are written to the append-only log in \href{https://github.com/synrc/kvs}{\texttt{synrc/kvs}} and forwarded to the Wazuh SIEM for real-time correlation and alerting.
+
+\textbf{AU-2 --- Event Logging.}
+\texttt{ias} is the primary source of most security events: login/logout, failed authentications, profile changes, privilege delegation. The event list is defined in configuration and complies with \foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}} 2.3-025-24} mandatory logging requirements.
+
+\textbf{AU-3 --- Content of Audit Records.}
+Each \texttt{ias} audit record contains: \texttt{timestamp} (millisecond precision, NTP-synchronized), \texttt{subject\_id}, \texttt{event\_type}, \texttt{resource\_id}, \texttt{action}, \texttt{outcome} (success/failure), \texttt{source\_ip}, \texttt{session\_id}, \texttt{signature} (HMAC record signature).
+
+\textbf{AU-6 --- Audit Record Review, Analysis, and Reporting.}
+\texttt{ias} logs are automatically forwarded to SIEM (Wazuh) via secured syslog. Wazuh applies NIST and CIS correlation rules to detect anomalies and generate alerts.
+
+\textbf{AU-9 --- Protection of Audit Information.}
+Audit records are stored in \texttt{kvs} with DSTU 7564-2014 (Kupyna) hashing. Any unauthorized modification of a record is detected upon the next chain verification.
+
+\textbf{AU-10 --- Non-Repudiation.}
+Critical events (document signing, approvals, certificate issuance) are recorded with RFC 3161 TSP timestamps from a trusted TSA provider, guaranteeing the legal evidentiary weight of records in judicial proceedings.
+
+\textbf{AU-12 --- Audit Record Generation.}
+\texttt{ias} generates audit records in real time for all configured events. A logging failure (e.g., due to buffer overflow) causes the operation itself to fail --- the "Fail Secure" principle.
+
+% =========================================================
+\subsection{Assessment, Authorization, and Monitoring (CA)}
+% =========================================================
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} implements the Assessment, Authorization, and Monitoring family (CA-2, CA-6, CA-7, CA-8, CA-9) by generating audit-ready documentation packages on demand, maintaining a continuous monitoring pipeline via Wazuh integration, and operating internal penetration-test tooling against the test CA hierarchy without impacting production.
+
+\textbf{CA-2 --- Control Assessments.}
+\texttt{synrc/ca} automates the collection of compliance evidence via the CMDB API. Before each audit (\foreignlanguage{ukrainian}{ДССЗЗІ} state expertise), \texttt{mix run -e 'CA.TeX.generate()'} is executed, generating a complete documentation package from the current system state.
+
+\textbf{CA-6 --- Authorization.}
+System authorization is formalized through the L3 security profile (\texttt{legal\_l3\_profile\_erp.pdf}), programmatically generated from the CMDB and cryptographically signed. Authorization is updated upon any significant architectural change.
+
+\textbf{CA-7 --- Continuous Monitoring.}
+Continuous monitoring is implemented through a triad: Wazuh SIEM (security events), Zabbix (availability and performance), and \texttt{synrc/ca} CMDB (configuration compliance). Any deviation from the recorded baseline state (CMDB drift) immediately generates an incident in \texttt{itsm}.
+
+\textbf{CA-8 --- Penetration Testing.}
+Regular penetration tests (at least annually) cover all ERP/1 components. Results are formalized as CMDB risk records and tracked through Plan of Action \& Milestones (POA\&M --- control PM-4).
+
+\textbf{CA-9 --- Internal System Connections.}
+All internal connections between ERP/1 services are authorized via mTLS (mutual TLS) with certificates from \texttt{synrc/ca}. An unauthorized or non-certificated connection is technically impossible.
+
+% =========================================================
+\subsection{Configuration Management (CM)}
+% =========================================================
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} CMDB implements the Configuration Management family (CM-2, CM-3, CM-6, CM-7, CM-8, CM-9) by expressing the entire baseline configuration as Elixir source code modules (\texttt{hw.ex}, \texttt{sys.ex}, \texttt{net.ex}). Any deviation from the declared baseline is detectable by diffing the current CMDB state against the cryptographically signed production commit.
+
+\textbf{CM-2, CM-3 --- Baseline Configuration and Configuration Change Control.}
+The baseline configuration of all components is captured in CMDB Elixir modules (\texttt{hw.ex}, \texttt{sys.ex}, \texttt{net.ex}). Every change in the production environment must first be reflected in the corresponding CMDB file and pass Code Review in Git. Deviation from the baseline (configuration drift) is detected by Wazuh FIM (File Integrity Monitoring).
+
+\textbf{CM-6 --- Configuration Settings.}
+All ERP/1 services are launched with strict security hardening baselines: UA Linux \foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{ДСТУ}-hardened}, SELinux Enforcing, Windows Server DISA STIG. Deviations from baseline settings are technically blocked through SCM mechanisms (Puppet/Ansible).
+
+\textbf{CM-7 --- Least Functionality.}
+Each ERP/1 service runs only with the components required to perform its function. Unnecessary modules, protocols, and ports are disabled. The list of permitted components is documented in the corresponding \texttt{sys.ex} CMDB entry.
+
+\textbf{CM-8 --- System Component Inventory.}
+The \texttt{synrc/ca} CMDB is a "living" registry of all hardware, software, and network components. Each resource has a unique inventory number, bound to a cryptographic certificate and recorded in \texttt{hw.ex} or \texttt{sys.ex}.
+
+\textbf{CM-9 --- Configuration Management Plan.}
+Instead of a separate textual document, the CM plan is directly encoded in the Git repository: the CI/CD pipeline, Elixir CMDB modules, Ansible playbooks, and this PDF report together form a complete, self-verifying configuration management plan.
+
+% =========================================================
+\subsection{Contingency Planning (CP)}
+% =========================================================
+
+\href{https://github.com/erlang/otp}{\texttt{erlang/otp}} provides the runtime foundation for ERP/1's Contingency Planning controls (CP-2, CP-7, CP-9, CP-10). The OTP supervision tree implements automatic failover and process restart; distributed Mnesia/KVS replication provides continuous data backup; and the hot-code-upgrade mechanism enables recovery from software faults without downtime.
+
+\textbf{CP-2 --- Contingency Plan.}
+Erlang/OTP is the foundation of ERP/1 fault tolerance. The Supervision Tree architecture guarantees the automatic restart of any failed process. At the cluster level, a minimum of three nodes (quorum) ensures availability even upon failure of one node.
+
+\textbf{CP-7 --- Alternate Processing Site.}
+Erlang/OTP supports hot failover between cluster nodes without loss of current sessions. The distributed process registry (\texttt{:pg} or via \texttt{synrc/kvs}) allows another node to take over processing upon primary node failure.
+
+\textbf{CP-9 --- Information System Backup.}
+\texttt{kvs} data is continuously replicated to all cluster nodes (synchronous Mnesia/RocksDB replication). Daily snapshots are written to a tape archive (HPE StoreEver) for offline storage.
+
+\textbf{CP-10 --- Information System Recovery and Reconstitution.}
+Recovery procedures are rehearsed as part of training (AT-3) in an isolated environment. The built-in \texttt{:hot\_code\_upgrade} function allows components to be updated without system downtime, minimizing RTO (Recovery Time Objective).
+
+% =========================================================
+\subsection{Identification and Authentication (IA)}
+% =========================================================
+
+\href{https://github.com/synrc/ca}{\texttt{synrc/ca}} and \href{https://github.com/zencrypted/ias}{\texttt{zencrypted/ias}} jointly implement the Identification and Authentication family (IA-2, IA-5, IA-8) for ERP/1. \texttt{synrc/ca} issues PKI credentials (X.509 certificates) backed by IIT Gryada-301 HSMs, while \texttt{zencrypted/ias} enforces MFA at every authentication boundary and manages authenticator lifecycle.
+
+\textbf{IA-2 --- Identification and Authentication (Organizational Users).}
+\texttt{ias} enforces strict MFA: the first factor is an X.509 certificate (smart card or IIT Gryada HSM token), the second factor is an OTP (TOTP/HOTP or hardware token). No system function is accessible without successful completion of both factors.
+
+\textbf{IA-2(1) --- MFA for Privileged Accounts (Network Access).}
+Administrative accounts additionally require a third factor --- push-notification confirmation on a registered device. Login from a "shared" device is technically blocked.
+
+\textbf{IA-2(2) --- MFA for Non-Privileged Accounts.}
+Standard users authenticate with a minimum of two factors. The first is a certificate on a smart card (PKCS\#15, DSTU 4145-2002 algorithm), the second is the smart-card PIN.
+
+\textbf{IA-5 --- Authenticator Management.}
+\texttt{synrc/ca} is the authoritative source of cryptographic authenticators (certificates). Management includes: enrollment (Certificate Enrollment via EST), renewal (ACME/CMP), revocation (OCSP/CRL), and archiving (Long-Term Validation, LTV). All authenticators are bound to a hardware carrier (e-Token, Gryada-301).
+
+\textbf{IA-5(1) --- Password-Based Authentication.}
+For service accounts where passwords are still used, \texttt{ias} enforces minimum complexity and stores passwords in Argon2id format (PHC winner, resistant to GPU attacks). Passwords are never transmitted in plaintext.
+
+\textbf{IA-8 --- Identification and Authentication (Non-Organizational Users).}
+For external systems (e.g., Unified State Register, Diia), \texttt{ias} supports identity federation via SAML 2.0 and OIDC, where the external IdP verifies the identity and \texttt{ias} issues a local token with limited rights based on attributes received from the external provider.
+
+% =========================================================
+\subsection{Media Protection (MP)}
+% =========================================================
+
+\href{https://github.com/synrc/kvs}{\texttt{synrc/kvs}} implements the Media Protection family (MP-2, MP-4, MP-5, MP-6, MP-7) for ERP/1. All records are encrypted at the storage level using \foreignlanguage{ukrainian}{ДСТУ}-compatible Kalyna AES-256-GCM with keys held in an IIT Gryada HSM; physical media access is restricted by PE controls enforced via the CMDB Policy Engine.
+
+\textbf{MP-2, MP-4 --- Media Access and Storage.}
+\texttt{kvs} is the primary storage for all critical ERP/1 data. Data is encrypted at the record level using \foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{ДСТУ} algorithms} (Kalyna AES-256 GCM) with keys stored in an IIT Gryada HSM. Physical access to servers running \texttt{kvs} is restricted via the Policy Engine and PE controls.
+
+\textbf{MP-5 --- Media Transport.}
+Tape backups (HPE MSL3040) are encrypted before writing. Physical tapes are stored in a safe with dual control. The procedure for removing a tape from the perimeter requires an authorized CR in \texttt{itsm}.
+
+\textbf{MP-6 --- Media Sanitization.}
+The sanitization procedure (DoD 5220.22-M or physical destruction for SSD/flash) is documented in \texttt{itsm} and recorded in the CMDB as a component de-inventory event.
+
+\textbf{MP-7 --- Media Use.}
+Removable media (USB) usage is technically blocked at the OS level (udev rules, Group Policy) for all workstations, except specifically authorized technical workstations with CISO approval.
+
+% =========================================================
+\subsection{System and Communications Protection (SC)}
+% =========================================================
+
+\href{https://github.com/synrc/vpn}{\texttt{synrc/vpn}} implements the System and Communications Protection family (SC-7, SC-8, SC-12, SC-28) for ERP/1. All inter-component traffic is protected by mTLS 1.3 with \foreignlanguage{ukrainian}{ДСТУ}-compatible cipher suites; boundary protection is enforced at the L3 VPN gateway; cryptographic key management is centralized in \href{https://github.com/synrc/ca}{\texttt{synrc/ca}} backed by IIT Gryada HSMs.
+
+\textbf{SC-7 --- Boundary Protection.}
+\texttt{synrc/vpn} implements a strict network perimeter based on IPsec IKEv2 with X.509 certificate authentication. All external connections (between sites, with remote users) pass through VPN tunnels. The Cisco Firepower 4145 NGFW (documented in CMDB) filters traffic at the perimeter.
+
+\textbf{SC-7(3) --- Access Points.}
+The number of external network connections is minimized and strictly documented in the \texttt{net.ex} CMDB. Each new access point requires a separate CR and CISO approval.
+
+\textbf{SC-8 --- Transmission Confidentiality and Integrity.}
+All traffic between ERP/1 components is protected by mTLS 1.3 with mandatory \foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{ДСТУ}-compatible} cipher suites. Unencrypted traffic is technically impossible --- \texttt{ias} rejects requests without a valid TLS certificate.
+
+\textbf{SC-12 --- Cryptographic Key Establishment and Management.}
+\texttt{synrc/ca} is the authoritative key center. Root keys are stored exclusively in the HSM (Gryada-301) and never leave the hardware module. Key rotation is performed according to the Key Ceremony procedure with Dual Control.
+
+\textbf{SC-28 --- Protection of Information at Rest.}
+PostgreSQL and Oracle use TDE (Transparent Data Encryption) with keys from the HSM. \texttt{kvs} performs additional encryption at the record level.
+
+% =========================================================
+\subsection{System and Information Integrity (SI)}
+% =========================================================
+
+\href{https://github.com/synrc/chat}{\texttt{synrc/chat}} implements the System and Information Integrity family (SI-3, SI-4, SI-7, SI-10) for ERP/1. CMS/S-MIME end-to-end encryption with mandatory digital signatures provides malicious code protection and message integrity; all messages are archived with RFC 3161 timestamps in \href{https://github.com/synrc/kvs}{\texttt{synrc/kvs}} for non-repudiation.
+
+\textbf{SI-3 --- Malicious Code Protection.}
+All cluster nodes are protected by Wazuh HIDS with up-to-date signatures. At the CI/CD pipeline level, automatic dependency scanning (SBOM, OWASP Dependency Check) is executed on every commit.
+
+\textbf{SI-4 --- System Monitoring.}
+The combination of Wazuh (security events) and Zabbix (performance metrics) provides 24/7 monitoring of all components. The Wazuh event correlator detects attack patterns (MITRE ATT\&CK) and automatically escalates them to \texttt{itsm}.
+
+\textbf{SI-7 --- Software, Firmware, and Information Integrity.}
+All ERP/1 releases are signed with a DSTU 4145-2002 digital signature from \texttt{synrc/ca} and published together with signatures. Checksums (DSTU 7564-2014 Kupyna-512) are verified before installing any update.
+
+\textbf{SI-10 --- Information Input Validation.}
+\texttt{synrc/chat} and all ERP/1 web components (via \texttt{synrc/ws}) apply strict schema validation (JSON Schema / XSD) of input data at the API Gateway level before passing it to business logic.
+
+% =========================================================
+\subsection{Supply Chain Risk Management (SR)}
+% =========================================================
+
+\href{https://github.com/synrc/chat}{\texttt{synrc/chat}} and \href{https://github.com/synrc/ca}{\texttt{synrc/ca}} together address the Supply Chain Risk Management family (SR-3, SR-4, SR-11). The entire ERP/1 software stack is delivered as reproducible, cryptographically signed OCI images with attached SBOMs; hardware components are verified against CMDB serial-number records and vendor supply chain agreements.
+
+\textbf{SR-3 --- Supply Chain Controls and Processes.}
+ERP/1 uses exclusively open-source components (Erlang/OTP, Elixir), whose source code is verified before inclusion. An SBOM (Software Bill of Materials) is generated automatically at every build.
+
+\textbf{SR-4 --- Provenance.}
+All components have cryptographically verified provenance. Release signatures are verified through the \texttt{synrc/ca} root CA. An undocumented or unsigned component cannot be installed in the production environment.
+
+\textbf{SR-11 --- Component Authenticity.}
+Hardware components (HSM, switches, servers) are verified via serial number and CMDB inventory record. Vendors (5HT Technology, IIT, Cisco) have signed supply chain security agreements.
+
+\section{Conclusion}
+By treating the Information Security Management System (ISMS) and the \foreignlanguage{ukrainian}{КСЗІ} documentation as "Infrastructure as Code" (IaC) via Elixir maps, ERPUNO LLC achieves a continuous, verifiable, and strictly compliant security posture. This approach significantly reduces the friction typically associated with \foreignlanguage{ukrainian}{ДССЗЗІ} and NIST audits by ensuring that the actual state of the system is always perfectly synchronized with its certified documentation.
+
+\subsection{Codebase Overview for Copyright Registration}
+The entire Configuration Management Database (CMDB), Continuous Accountability System, and PKI Certificate Authority components discussed in this document are implemented as a cohesive software suite. This software suite forms the basis for the formal registration of the copyright work.
+
+The core architectural blocks of the codebase include:
+\begin{itemize}
+    \item \textbf{SYS-SYNRC-CA}: The central Certificate Authority and HSM backend responsible for issuing X.509 certificates, OCSP, CRLs, and managing the entire PKI lifecycle via ACME and EST protocols.
+    \item \textbf{CMDB Profiles}: The declarative Elixir modules defining the precise state of hardware (\texttt{hw.ex}), network topology (\texttt{net.ex}), and system applications (\texttt{sys.ex}).
+    \item \textbf{Policy and Risk Engines}: Modules responsible for automated data categorization (\texttt{data.ex}), dynamic risk taxonomies (\texttt{risk.ex}), and strict role-based/attribute-based access controls (\texttt{roles.ex}, \texttt{abac.ex}).
+\end{itemize}
+
+The software is continuously developed, documented, and published at the following official resources:
+\begin{itemize}
+    \item \textbf{Source Code Repository}: \url{https://github.com/synrc/ca}
+    \item \textbf{Official Product Portal}: \url{https://erp.uno/ca/}
+    \item \textbf{Developer Documentation}: \url{https://ca.n2o.dev}
+\end{itemize}
+
+\begin{thebibliography}{9}
+\bibitem{nist53}
+National Institute of Standards and Technology. \textit{Security and Privacy Controls for Information Systems and Organizations}. NIST Special Publication 800-53, Revision 5.
+
+\bibitem{ndtzi37}
+\foreignlanguage{ukrainian}{{\selectlanguage{ukrainian}Державна служба спеціального зв'язку та захисту інформації\selectlanguage{english}} України. \textit{\foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}} 3.7-003-2023}. Порядок проведення державної експертизи в сфері технічного захисту інформації}.}
+
+\bibitem{ndtzi25} 
+\foreignlanguage{ukrainian}{{\selectlanguage{ukrainian}Державна служба спеціального зв'язку та захисту інформації\selectlanguage{english}} України. \textit{\foreignlanguage{ukrainian}{\foreignlanguage{ukrainian}{НД \foreignlanguage{ukrainian}{ТЗІ}} 2.5-004-99}. Критерії оцінки захищеності інформації в комп'ютерних системах від несанкціонованого доступу}.}
+
+\bibitem{iso27001} 
+International Organization for Standardization. \textit{ISO/IEC 27001:2022. Information security, cybersecurity and privacy protection — Information security management systems — Requirements}.
+\end{thebibliography}
+
+\end{document}
+
