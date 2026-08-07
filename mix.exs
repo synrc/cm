@@ -9,10 +9,10 @@ defmodule CM.Mixfile do
       releases: [ca: [include_executables_for: [:unix], cookie: "SYNRC:CM"]],
       package: [
         name: :cm,
-        files: ~w(config priv lib mix.exs LICENSE README.md),
+        files: ~w(config priv lib mix.exs index.html LICENSE README.md),
         licenses: ["ISC"],
         maintainers: ["Namdak Tonpa"],
-        links: %{"GitHub" => "https://github.com/synrc/ca"}
+        links: %{"GitHub" => "https://github.com/synrc/cm"}
       ],
       compilers: Mix.compilers(),
       deps: [{:ex_doc, ">= 0.0.0", only: :dev, runtime: false}]

@@ -1,0 +1,134 @@
+<html><head><meta charset="utf-8" /><meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="CM — CXC 138 31 Configuration Management" /><meta name="author" content="Maxim Sokhatsky" />
+<title>CM</title>
+<link rel="stylesheet" href="https://n2o.dev/blank.css" />
+<link rel="stylesheet" href="https://n2o.dev/zima.css" />
+<link rel="stylesheet" href="https://n2o.dev/pro/pro.css" />
+</head><body><nav>
+    <a href="https://erp.uno/">ERP/1</a>
+    <a href="https://cm.n2o.dev" style="background:#ededed;">CM</a>
+</nav><header>
+    <a href="https://github.com/synrc/cm"><img src="https://n2o.dev/img/E08F.svg" /></a>
+    <h1>CMDB</h1>
+</header><aside>
+    <article>
+        <section>
+            <h3>SYNOPSIS</h3>
+            <div>ERP/1 CM is the Configuration Management Database (CMDB),
+                Security Control Profile framework,
+                and automated compliance document compiler for SYNRC services.</div>
+        </section>
+        <section>
+            <h3>SPEC</h3>
+            <div><ul><li><a href="doc/CA.ABAC.html">ABAC</a></li>
+                     <li><a href="doc/CA.Data.html">DATA</a></li>
+                     <li><a href="doc/CA.HW.html">HW</a></li>
+                     <li><a href="doc/CA.Net.html">NET</a></li>
+                     <li><a href="doc/CA.Proc.html">PROC</a></li>
+                     <li><a href="doc/CA.Sys.html">SYS</a></li>
+                     <li><a href="doc/CA.Risk.html">RISK</a></li>
+                     <li><a href="doc/CA.Mitre.html">MITRE</a></li>
+                     <li><a href="doc/CA.NPA.html">NPA</a></li>
+                     <li><a href="doc/CA.TeX.html">TEX</a></li></ul></div>
+            <br />
+            <div>
+                JUL 2026 © <a href="https://github.com/5HT">5HT</a> <a href="https://5HT.co/license/">DHARMA 2.0</a><br />
+                VER 0.7.7
+            </div>
+        </section>
+    </article>
+    <article>
+        <section>
+            <h3>TAXONOMIES</h3>
+            <div>
+                 <ul><li>ABAC / RBAC</li>
+                     <li>Data Assets</li>
+                     <li>Hardware</li>
+                     <li>Network Zoning</li>
+                     <li>Business Processes</li>
+                     <li>Software Assets</li>
+                 </ul>
+             </div>
+        </section>
+       <section>
+          <h3>PROFILES</h3>
+            <div><ul>
+                 <li>Level 1 Base</li>
+                 <li>Level 2 Court</li>
+                 <li>Level 3 ERP/1</li>
+                 <li>Level 3 Mail/VPN</li>
+                 <li>NIST SP 800-53B</li>
+            </div>
+        </section>
+       <section>
+          <h3>COMPLIANCE</h3>
+            <div><ul><li>NIST SP 800-53</li>
+                     <li>FIPS 199 / 200</li>
+                     <li>ISO/IEC 27005</li>
+                     <li>НД ТЗІ / КСЗІ</li>
+                     <li>ДСТУ 4145 / 7564</li>
+            </div>
+        </section>
+        <section>
+            <h3>COMPILERS</h3>
+            <div>
+                 <ul><li>LaTeX Engine</li>
+                     <li>Order Generator</li>
+                     <li>CMDB Inspector</li>
+                 </ul>
+             </div>
+        </section>
+</aside>
+<main>
+    <article>
+    <section>
+   <h3>INTRO</h3>
+   <p>ERP/1 CM (CXC 138 31 Configuration Management) is an Elixir/OTP security profile management framework, CMDB asset classification registry, and automated compliance document compiler.</p>
+   <p>Extracted and specialized from the CMDB functionality of <a href="https://github.com/synrc/ca">synrc/ca</a>, CM provides formal security baseline specifications, regulatory document generation (LaTeX / PDF reports and legal administrative orders), OID registries, and security control mappings compliant with NIST SP 800-53, FIPS 199/200, ISO/IEC 27005, MITRE ATT&amp;CK, and Ukrainian KSZI / НД ТЗІ regulations.</p>
+   <br>
+    </section>
+    <section>
+   <h3>REGULATORY FRAMEWORK</h3>
+   <p>CM operates under a hierarchical regulatory framework combining Ukrainian national legislation, state technical standards (НД ТЗІ), and international frameworks:</p>
+   <p>
+   <ul>
+   <li>● <b>Ukrainian National Laws:</b> Law of Ukraine "On Protection of Information in Information and Communication Systems" (No. 80/94-VR), "On Information" (No. 2657-XII), and "On Electronic Trust Services" (No. 2155-VIII).</li>
+   <li>● <b>State Security Profile Orders:</b> Mandatory State Security Profile Orders №409 (Open/Confidential Data) and №419 (Official Data).</li>
+   <li>● <b>НД ТЗІ Technical Standards:</b> НД ТЗІ 1.1-002-99, 2.5-004-99, 2.5-005-99, 2.5-008-02, 2.5-010-03, 1.6-005-22, 2.3-025-24 (Three Volumes of security control descriptions), 2.6-001-11 (Two-stage certification), 3.6-006-24 (Critical state registries), and 3.7-003-23.</li>
+   <li>● <b>National Cryptographic Standards:</b> ДСТУ 4145-2002 (ECDSA digital signature) and ДСТУ 7564-2014 (Kupyna hash function).</li>
+   <li>● <b>International Baselines:</b> NIST SP 800-53 Rev. 5, ISO/IEC 27001:2022, FIPS 140-3, and MITRE ATT&amp;CK Enterprise taxonomy.</li>
+   </ul>
+   </p>
+   <br>
+    </section>
+    <section>
+   <h3>SEGREGATION OF DUTIES</h3>
+   <p>According to Ukrainian regulatory frameworks (e.g., НД ТЗІ 2.6-001-11) and global Maker/Checker principles, building and certifying a Comprehensive Information Security System (КСЗІ) is strictly a <b>two-stage procedure</b> involving independent licensed providers:</p>
+   <p>
+   <ul>
+   <li>● <b>Stage 1: Developer (Provider 1)</b> &mdash; Conducts risk assessment, formulates the Target Security Profile (Technical Specification) in Elixir CMDB structures, configures technical security controls, and delivers the system into trial operation.</li>
+   <li>● <b>Stage 2: Expertise Organizer (Provider 2)</b> &mdash; Receives the Technical Specification, designs an independent audit program, performs instrumental testing and live verification, and issues the official Expert Conclusion for SSSCIP (ДССЗЗІ).</li>
+   </ul>
+   </p>
+   <br>
+    </section>
+    <section>
+   <h3>DOCUMENTATION-AS-CODE (DaC)</h3>
+   <p>CM eliminates manual documentation drift by generating publication-ready LaTeX specifications, security architecture diagrams, and regulatory administrative orders (накази з ІБ) directly from Elixir source modules:</p>
+   <p>
+   <ul>
+   <li>● <b>CA.TeX:</b> Compiles formal TeX specifications using <code>security-profiles.tex</code> templates.</li>
+   <li>● <b>CA.NPA:</b> Generates legal administrative security orders for enterprise SZI establishment and KSZI development.</li>
+   <li>● <b>CA.PRO:</b> Programmatic query interface for real-time inspection of hardware, software, role, network, and risk inventories.</li>
+   </ul>
+   </p>
+   <br><center>&dot;</center>
+    </section>
+    </article>
+</main>
+<footer>
+   <br><center>&dot;</center>
+   <br>Namdak Tonpa <span class="heart">❤</span> 2026</footer>
+</body>
+</html>
