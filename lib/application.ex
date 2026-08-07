@@ -1,7 +1,6 @@
 defmodule CM do
   @moduledoc """
-  The main CA module implements Elixir application functionality
-  that runs TCP and HTTP connections under Erlang/OTP supervision.
+  The main CM module implements Configuration Management application functionality.
   """
   use Application
 

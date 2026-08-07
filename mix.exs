@@ -5,7 +5,7 @@ defmodule CM.Mixfile do
     [
       app: :cm,
       version: "0.7.7",
-      description: "CM  CXC 138 31 Certificate Authority",
+      description: "CM  CXC 138 31 Configuration Management",
       releases: [ca: [include_executables_for: [:unix], cookie: "SYNRC:CM"]],
       package: [
         name: :cm,
