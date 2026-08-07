@@ -272,6 +272,6 @@ Under Ukrainian technical protection regulations (e.g., **НД ТЗІ 2.6-001-11
 
 ## License & Maintainers
 
-- **Maintainer**: Namdak Tonpa ([SYNRC](https://github.com/synrc))
-- **Repository**: [github.com/synrc/ca](https://github.com/synrc/ca)
+- **Maintainer**: Namdak Tonpa
+- **Repository**: [github.com/synrc/ca](https://github.com/synrc/cm)
 - **License**: [ISC License](LICENSE)
